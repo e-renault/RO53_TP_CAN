@@ -7,6 +7,7 @@
 .project
 *.ld
 *.launch
+.ioc
 main.*
 stm32f4xx_it.*
 stm32f4xx_hal_msp.*
