@@ -1,22 +1,23 @@
 #include "lin.h"
 
+
 int CAN_set_filter(int index, int scale_mode, int filter_mode, int FIFO_ID, uint32_t filter_ID, uint32_t filter_Msk) {
 	//deactivate filter
-	CAN1->FA1R &= ~(0b1U << index);
+	CAN1->FA1R &= ~(0b1UL << index);
 
 	//enter filter init mode
-	CAN1->FMR |= 0b1U << CAN_FMR_FINIT_Pos;
+	CAN1->FMR |= 0b1UL << CAN_FMR_FINIT_Pos;
 
 	//scale mode (16 or 32 bits)
-	CAN1->FS1R &= ~(0b1U << index);
+	CAN1->FS1R &= ~(0b1UL << index);
 	CAN1->FS1R |= scale_mode << index;
 
 	//filter mode (list or mask
-	CAN1->FM1R &= ~(0b1U << index);
+	CAN1->FM1R &= ~(0b1UL << index);
 	CAN1->FM1R |= filter_mode << index;
 
 	//FIFO index
-	CAN1->FFA1R &= ~(0b1U << index);
+	CAN1->FFA1R &= ~(0b1UL << index);
 	CAN1->FFA1R |= FIFO_ID << index;
 
 	//configure filter bank
@@ -47,16 +48,16 @@ int CAN_send_msg(CAN_MSG msg) {
 				msg.data[3] << 24 |
 				msg.data[2] << 16 |
 				msg.data[1] << 8 |
-				msg.date[0] << 0;
+				msg.data[0] << 0;
 
 		CAN1->sTxMailBox[0].TDHR =
 				msg.data[7] << 24 |
 				msg.data[6] << 16 |
 				msg.data[5] << 8 |
-				msg.date[4] << 0;
+				msg.data[4] << 0;
 
 		//request send message
-		CAN1->sTxMailBox[0].TIR |= 0b1U << CAN_TI0R_TXRQ_Pos;
+		CAN1->sTxMailBox[0].TIR |= 0b1UL << CAN_TI0R_TXRQ_Pos;
 
 		return 1;
 	} else {
@@ -64,11 +65,14 @@ int CAN_send_msg(CAN_MSG msg) {
 	}
 }
 
-extern CAN_MSG CAN_RxMessage;
 
+
+
+/**
+extern CAN_MSG CAN_RxMessage;
 void CAN1_RX0_IRQHandler(void) {
 	//Recieve CAN frame
-	CAN_RxMessage.mode = (CAN1->sFIFOMailBox[0].IDE & CAN_TI0R_IDE_Msk) >> CAN_TI0R_IDE_Pos;
+	CAN_RxMessage.mode = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_IDE_Msk) >> CAN_TI0R_IDE_Pos;
 
 	if (CAN_RxMessage.mode == CAN_MODE_STANDARD) {
 		CAN_RxMessage.ID = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_STID_Msk) >> CAN_TI0R_STID_Pos;
@@ -82,7 +86,7 @@ void CAN1_RX0_IRQHandler(void) {
 		CAN_RxMessage.data[i] = (CAN1->sFIFOMailBox[0].RDLR >> shift) & 0xFF;
 	}
 	//reset FIFO
-	CAN1->RF0R |= 0b1U << CAN_RF0R_RFOM0_Pos;
+	CAN1->RF0R |= 0b1UL << CAN_RF0R_RFOM0_Pos;
 	//reset interrupt
-	HAL_CAN_IRQHandler(&hcan1);
-}
+	//HAL_CAN_IRQHandler(&hcan1);
+}**/
