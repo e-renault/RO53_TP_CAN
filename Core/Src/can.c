@@ -1,26 +1,32 @@
 #include "can.h"
 #include "stm32f4xx.h"
-#include "stm32f4xx_hal_rcc_ex.h"
 
 CAN_TypeDef *CAN = CAN1;
 
-void CAN_config(uint8_t IDE, uint16_t Filter_ID_high, uint16_t Filter_ID_low, uint16_t Filter_Mask_high, uint16_t Filter_mask_low){
-	GPIO_InitTypeDef GPIO_InitStruct = {0};
+void CAN_config(){
+	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
 
-	__HAL_RCC_GPIOB_CLK_ENABLE();
-	GPIO_InitStruct.Pin = GPIO_PIN_6|GPIO_PIN_7;
-	GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-	GPIO_InitStruct.Alternate = GPIO_AF9_CAN1;
-	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+	GPIO_TypeDef *PB = GPIOB;
+	//application des masques
+	PB->MODER 	&= ~(GPIO_MODER_MODER8_Msk 		| GPIO_MODER_MODER9_Msk);
+	PB->OTYPER 	&= ~(GPIO_OTYPER_OT8_Msk 		| GPIO_OTYPER_OT9_Msk);
+	PB->PUPDR 	&= ~(GPIO_PUPDR_PUPD8_Msk 		| GPIO_PUPDR_PUPD9_Msk);
+	PB->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED8_Msk 	| GPIO_OSPEEDR_OSPEED9_Msk);
+	PB->AFR[1] 	&= ~(GPIO_AFRH_AFSEL8_Msk 		| GPIO_AFRH_AFSEL9_Msk);
 
+	//modification des constantes
+	PB->MODER 	|= (0b10U << GPIO_MODER_MODER8_Pos 	| 0b10U << GPIO_MODER_MODER9_Pos); //mode sortie
+	PB->OTYPER 	|= (0U << GPIO_OTYPER_OT8_Pos 		| 0U << GPIO_OTYPER_OT9_Pos); //mode push-pull
+	PB->PUPDR 	|= (0U << GPIO_PUPDR_PUPD8_Pos 		| 0U << GPIO_PUPDR_PUPD9_Pos); //pas de resistance pull up/down
+	PB->OSPEEDR |= (0b11U << GPIO_OSPEEDR_OSPEED8_Pos 	| 0b11U << GPIO_OSPEEDR_OSPEED9_Pos); //mode high speed
+	PB->AFR[1]  |= (0b1001U << GPIO_AFRH_AFSEL8_Pos | 0b1001U << GPIO_AFRH_AFSEL9_Pos);
 
 	//Enable CAN clock
-	__HAL_RCC_CAN1_CLK_ENABLE();
+	RCC->APB1ENR |= RCC_APB1ENR_CAN1EN;
 
 	//Clear sleep bit to wakeup
-	CAN->MCR &= 0xFFFFFFFD; //!CAN_MCR_SLEEP;
+	CAN->MCR &= ~CAN_MCR_SLEEP; //!CAN_MCR_SLEEP;
+
 	//Wait for CAN to wakeup
 	while(!(CAN->MSR & CAN_MSR_SLAK)); //0x2
 
@@ -32,76 +38,35 @@ void CAN_config(uint8_t IDE, uint16_t Filter_ID_high, uint16_t Filter_ID_low, ui
 	//Set config
 	CAN->MCR &= CAN_MCR_INRQ; //0x00000001;
 
-	//Set bit Timing = 250Kbauds/sec / BS1= 6TQ / BS2 = 3TQ / Resynchronization jump width = 1
-	CAN->BTR = 0x01250010; //0x00250042; //41250010
-
-	//Set Mode Loopback
-	CAN->BTR |= CAN_BTR_LBKM;
-	//CAN->BTR &= !CAN_BTR_LBKM;
-
-
+	//Set bit Timing
+	CAN->BTR = (0b0U << CAN_BTR_LBKM_Pos |
+			0b01U << CAN_BTR_SJW_Pos |
+			0b010U << CAN_BTR_TS2_Pos|
+			0b101U << CAN_BTR_TS1_Pos |
+			0x10 << CAN_BTR_BRP_Pos);
 
 	//Release Mailbox
 	CAN->RF0R |= CAN_RF0R_RFOM0;
-
-
-
 
 	/*Interrupts*/
 	//Set Interrupt RX FIFO0 (FMPIE0) and TX box empty
 	CAN->IER |= CAN_IER_FMPIE0;
 
-
 	//Activate Interrupt on NVIC
-	//HAL_NVIC_SetPriority(CAN1_RX0_IRQn, 0, 1); //IRQn_Type IRQn, uint32_t PreemptPriority, uint32_t SubPriority
 	uint32_t prioritygroup = 0x00U;
 	prioritygroup = NVIC_GetPriorityGrouping();
 	NVIC_SetPriority(CAN1_RX0_IRQn, NVIC_EncodePriority(prioritygroup, 0, 1));
 
-	//HAL_NVIC_EnableIRQ(CAN1_RX0_IRQn);
 	/* Enable interrupt */
 	NVIC_EnableIRQ(CAN1_RX0_IRQn);
 
-
-
-
 	//Go to normal mode
-	CAN->MCR &= 0xFFFFFFFE; //!CAN_MCR_INRQ;
+	CAN->MCR &= ~CAN_MCR_INRQ; //!CAN_MCR_INRQ;
 	//Wait for normal mode
 	while(!(CAN->MSR & CAN_MSR_INAK)); //0x1
 
-	//Deactivate Filter 0 and 1
-	CAN->FA1R &= CAN_FFA1R_FFA0 | CAN_FFA1R_FFA1; //0xFFFFFFFC;
-	//Initialize mode for all filters
-	CAN->FMR |= CAN_FMR_FINIT; //0x1;
-
-
-
-
-	/*Filters with 32 bits mode*/
-	//32 bits filter to filter 0,1
-	CAN->FS1R |= 0x00000003;
-	//Filter 1 in List mode
-	CAN->FM1R |= 0x00000002;
-	//Filter 0 in mask mode
-	CAN->FM1R &= 0xFFFFFFFE;
-	//Assign filter 0,1 to FIFO0
-	CAN->FFA1R &= 0xFFFFFFFC;
-
-	//Configure the filter bank
-	CAN->sFilterRegister[0].FR1 = (0x100 << 21); //ID
-	CAN->sFilterRegister[0].FR2 = (0x7F0 << 5); //Mask
-
-	CAN->sFilterRegister[1].FR1 = (0x200 << 21); //ID
-	CAN->sFilterRegister[1].FR2 = (0x205 << 5); //ID
-	CAN->sFilterRegister[1].FR2 |= 0x2; //ID with RTR = 1
-
-	//Activate Filter 0 and 1
-	CAN->FA1R |= 0x00000003;
-	//Leave filter init
-	CAN->FMR &= 0x0;
-
-
+	//set a filter that let all pass
+	CAN_set_filter(0, CAN_FILTER_SCALE_32BIT, CAN_FILTER_MODE_MASK, CAN_FILTER_FIFO0_, 0x00000000, 0x00000000);
 }
 
 
@@ -144,7 +109,7 @@ int CAN_send_msg(CAN_MSG msg) {
 		if (msg.mode == CAN_MODE_STANDARD) {
 			CAN1->sTxMailBox[0].TIR = (msg.ID << CAN_TI0R_STID_Pos) | (msg.RTR << CAN_TI0R_RTR_Pos);
 		} else {
-			CAN1->sTxMailBox[0].TIR = (msg.ID << CAN_TI0R_EXID_Pos) | (msg.RTR << CAN_TI0R_RTR_Pos);
+			CAN1->sTxMailBox[0].TIR = (msg.ID << CAN_TI0R_EXID_Pos) | (msg.RTR << CAN_TI0R_RTR_Pos) | (0b1UL << CAN_TI0R_IDE_Pos);
 		}
 
 		CAN1->sTxMailBox[0].TDTR = msg.DLC;
@@ -170,31 +135,19 @@ int CAN_send_msg(CAN_MSG msg) {
 	}
 }
 
-
-
-
-/*
-CAN_MSG CAN_RxMessage;
+CAN_MSG incoming_msg;
 void CAN1_RX0_IRQHandler(void) {
-	//Recieve CAN frame
-	CAN_RxMessage.mode = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_IDE_Msk) >> CAN_TI0R_IDE_Pos;
-	if (CAN_RxMessage.mode == CAN_MODE_STANDARD) {
-		CAN_RxMessage.ID = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_STID_Msk) >> CAN_TI0R_STID_Pos;
+	incoming_msg.mode = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_IDE_Msk) >> CAN_TI0R_IDE_Pos;
+	if (incoming_msg.mode == CAN_MODE_STANDARD) {
+		incoming_msg.ID = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_STID_Msk) >> CAN_TI0R_STID_Pos;
 	} else {
-		CAN_RxMessage.ID = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_EXID_Msk) >> CAN_TI0R_EXID_Pos;
+		incoming_msg.ID = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_EXID_Msk) >> CAN_TI0R_EXID_Pos;
 	}
-	CAN_RxMessage.RTR = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_RTR_Msk) >> CAN_TI0R_RTR_Pos;
-	CAN_RxMessage.DLC = CAN1->sFIFOMailBox[0].RDTR & CAN_RDT0R_DLC_Msk;
+	incoming_msg.RTR = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_RTR_Msk) >> CAN_TI0R_RTR_Pos;
+	incoming_msg.DLC = CAN1->sFIFOMailBox[0].RDTR & CAN_RDT0R_DLC_Msk;
 	for (int i = 0, shift = 0; i<8; i++, shift += 8) {
-		CAN_RxMessage.data[i] = (CAN1->sFIFOMailBox[0].RDLR >> shift) & 0xFF;
+		incoming_msg.data[i] = (CAN1->sFIFOMailBox[0].RDLR >> shift) & 0xFF;
 	}
-	//reset FIFO
 	CAN1->RF0R |= 0b1UL << CAN_RF0R_RFOM0_Pos;
-	//reset interrupt
-	//HAL_CAN_IRQHandler(&hcan1);
-	CAN1->IER
-
 }
-*/
-
 

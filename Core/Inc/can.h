@@ -30,7 +30,7 @@ typedef struct{
 
 int CAN_send_msg(CAN_MSG msg);
 
-void CAN_config(uint8_t, uint16_t, uint16_t, uint16_t, uint16_t);
+void CAN_config();
 
 
 #endif /* __CAN_H */
