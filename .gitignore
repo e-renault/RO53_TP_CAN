@@ -9,7 +9,6 @@
 *.launch
 *.ioc
 main.*
-stm32f4xx_it.*
 stm32f4xx_hal_msp.*
 system_stm32f4xx.*
 syscalls.*
