@@ -5,8 +5,13 @@
 
 #include "lin.h"
 
-
-
+typedef struct{
+	uint8_t mode;//Standard or extended
+	uint32_t ID;
+	uint8_t RTR;
+	uint8_t DLC;
+	uint8_t data[8];
+}LIN_MSG;
 
 void UART_Init(void);
 

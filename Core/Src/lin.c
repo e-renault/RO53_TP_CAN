@@ -51,17 +51,17 @@ void UART_Init(void){
 					| 0b0U << (USART_CR1_RXNEIE_Pos)
 					| 0b0U << (USART_CR1_RE_Pos);
 
-	/* No LIN mode, No clock output (synchronous mode)*/
-	USART2->CR2 &= ~(USART_CR2_LINEN_Msk | USART_CR2_LBCL_Msk);
-	USART2->CR2 |= 0b0U << (USART_CR2_LINEN_Pos) | 0b0U << (USART_CR2_LBCL_Pos);
+	/* LIN mode, STOP[1:0] and CLKEN cleared for LIN, No clock output (synchronous mode), LBDL to 1 for */
+	USART2->CR2 &= ~(USART_CR2_LINEN_Msk | USART_CR2_STOP_Msk | USART_CR2_CLKEN_Msk | USART_CR2_LBCL_Msk | USART_CR2_LBDL_Msk);
+	USART2->CR2 |= 0b1U << (USART_CR2_LINEN_Pos) | 0b0U << (USART_CR2_LBCL_Pos) | 0b00U << (USART_CR2_STOP_Pos) | 0b0U << (USART_CR2_CLKEN_Pos) | 0b1U << (USART_CR2_LBDL_Pos);
 
-	/*No control mode, 3 sample point,*/
-	USART2->CR3 &= ~(USART_CR3_ONEBIT_Msk | USART_CR3_CTSE_Msk);
-	USART2->CR3 |= 0b0U << (USART_CR3_ONEBIT_Pos) | 0b0U << (USART_CR3_CTSE_Pos);
+	/*No control mode, 3 sample point, SCEN, HDSEL and IREN cleared for LIN*/
+	USART2->CR3 &= ~(USART_CR3_ONEBIT_Msk | USART_CR3_CTSE_Msk | USART_CR3_SCEN_Msk | USART_CR3_HDSEL_Msk | USART_CR3_IREN_Msk);
+	USART2->CR3 |= 0b0U << (USART_CR3_ONEBIT_Pos) | 0b0U << (USART_CR3_CTSE_Pos) | 0b0U << (USART_CR3_SCEN_Pos) | 0b0U << (USART_CR3_HDSEL_Pos) | 0b0U << (USART_CR3_IREN_Pos);
 
-	/*19200bauds -> USARTDIV = 273.4375 -> Mantissa = 273d=0x111 , Fraction = 0.4375*16 = 7d = 0x7*/
+	/*19200bauds -> USARTDIV = 1093 -> Mantissa = 1093d=0x445 , Fraction = 0.0000*16 = 0d = 0x0*/
 	USART2->BRR &= ~(USART_BRR_DIV_Mantissa_Msk | USART_BRR_DIV_Fraction_Msk);
-	USART2->BRR |= 0x111U << (USART_BRR_DIV_Mantissa_Pos) | 0x7U << (USART_BRR_DIV_Fraction_Pos);
+	USART2->BRR |= 0x445U << (USART_BRR_DIV_Mantissa_Pos) | 0x0U << (USART_BRR_DIV_Fraction_Pos);
 
 	/*Enable UART*/
 	USART2->CR1 &= ~(USART_CR1_UE_Msk | USART_CR1_RXNEIE_Msk| USART_CR1_TE_Msk | USART_CR1_RE_Msk);
@@ -74,12 +74,12 @@ void UART_Init(void){
 }
 
 /*--- Transmit LIN Message ---*/
-void SendMessage(LINMSG *msg) {
+void SendMessage(LIN_MSG *msg) {
 
 }
 
 /*--- Transmit LIN Request ---*/
-void SendRequest(LINMSG *msg) {
+void SendRequest(LIN_MSG *msg) {
 
 }
 
@@ -91,8 +91,8 @@ void sync_break(void) {
 /*--- Transmit char ---*/
 void UART_PutChar(uint8_t data) {
 	USART2->DR = data;
-	while(!(USART2->SR & 0x00000080));		// donnee transferee au registre de decalage
-	while(!(USART2->SR & 0x00000040));		//fin de transmission
+	while(!(USART2->SR & USART_SR_TXE));		// donnee transferee au registre de decalage
+	while(!(USART2->SR & USART_SR_TC));		//fin de transmission
 }
 
 /*--- Read char ---*/

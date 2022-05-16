@@ -18,8 +18,6 @@
 #define CAN_FILTER_INACTIVE 0b0U
 #define CAN_FILTER_ACTIVE 0b1UL
 
-int CAN_set_filter(int index, int scale_mode, int filter_mode, int FIFO_ID, uint32_t filter_ID, uint32_t filter_Msk);
-
 typedef struct{
 	uint8_t mode;//Standard or extended
 	uint32_t ID;
@@ -27,6 +25,8 @@ typedef struct{
 	uint8_t DLC;
 	uint8_t data[8];
 }CAN_MSG;
+
+int CAN_set_filter(int index, int scale_mode, int filter_mode, int FIFO_ID, uint32_t filter_ID, uint32_t filter_Msk);
 
 int CAN_send_msg(CAN_MSG msg);
 
