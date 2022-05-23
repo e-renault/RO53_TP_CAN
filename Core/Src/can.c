@@ -151,31 +151,41 @@ void CAN1_RX0_IRQHandler(void) {
 	CAN1->RF0R |= 0b1UL << CAN_RF0R_RFOM0_Pos;
 
 	if(incoming_msg.data[0] == 0x88){
-		CAN_MSG msg;
-		msg.mode = CAN_MODE_EXTENDED;
-		msg.ID = 0x10530112;
-		msg.RTR = 0;
-		msg.DLC = 1;
-
-		uint8_t data[1] = {0x04};
-		for (int i = 0; i<1; i++) {
-			msg.data[i] = data[i];
-		}
-		CAN_send_msg(msg);
+		allumerClignotant();
 	}
 	if(incoming_msg.data[0] == 0x5D || incoming_msg.data[0] == 0x5E){
-		CAN_MSG msg;
-		msg.mode = CAN_MODE_EXTENDED;
-		msg.ID = 0x10530112;
-		msg.RTR = 0;
-		msg.DLC = 1;
-
-		uint8_t data2[1] = {0x00};
-		for (int i = 0; i<1; i++) {
-			msg.data[i] = data2[i];
-		}
-
-		CAN_send_msg(msg);
+		eteindreClignotant();
 	}
 }
 
+
+void allumerClignotant(){
+	CAN_MSG msg;
+	msg.mode = CAN_MODE_EXTENDED;
+	msg.ID = 0x10530112;
+	msg.RTR = 0;
+	msg.DLC = 1;
+
+	uint8_t data[1] = {0x04};
+	for (int i = 0; i<1; i++) {
+		msg.data[i] = data[i];
+	}
+	CAN_send_msg(msg);
+}
+
+
+
+void eteindreClignotant(){
+	CAN_MSG msg;
+	msg.mode = CAN_MODE_EXTENDED;
+	msg.ID = 0x10530112;
+	msg.RTR = 0;
+	msg.DLC = 1;
+
+	uint8_t data2[1] = {0x00};
+	for (int i = 0; i<1; i++) {
+		msg.data[i] = data2[i];
+	}
+
+	CAN_send_msg(msg);
+}

@@ -32,5 +32,7 @@ int CAN_send_msg(CAN_MSG msg);
 
 void CAN_config();
 
+void allumerClignotant();
+void eteindreClignotant();
 
 #endif /* __CAN_H */
