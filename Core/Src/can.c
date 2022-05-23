@@ -66,7 +66,7 @@ void CAN_config(){
 	while(!(CAN->MSR & CAN_MSR_INAK)); //0x1
 
 	//set a filter that let all pass
-	CAN_set_filter(0, CAN_FILTER_SCALE_32BIT, CAN_FILTER_MODE_MASK, CAN_FILTER_FIFO0_, 0x00000000, 0x00000000);
+	CAN_set_filter(0, CAN_FILTER_SCALE_32BIT, CAN_FILTER_MODE_MASK, CAN_FILTER_FIFO0_, 0x10FF50FF, 0xFF00FF00);
 }
 
 
@@ -91,8 +91,8 @@ int CAN_set_filter(int index, int scale_mode, int filter_mode, int FIFO_ID, uint
 	CAN1->FFA1R |= FIFO_ID << index;
 
 	//configure filter bank
-	CAN1->sFilterRegister[index].FR1 = filter_ID;
-	CAN1->sFilterRegister[index].FR2 = filter_Msk;
+	CAN1->sFilterRegister[index].FR1 = (filter_ID<<3);
+	CAN1->sFilterRegister[index].FR2 = (filter_Msk<<3);
 
 	//reactivate filter
 	int is_active = CAN_FILTER_ACTIVE;
@@ -149,5 +149,33 @@ void CAN1_RX0_IRQHandler(void) {
 		incoming_msg.data[i] = (CAN1->sFIFOMailBox[0].RDLR >> shift) & 0xFF;
 	}
 	CAN1->RF0R |= 0b1UL << CAN_RF0R_RFOM0_Pos;
+
+	if(incoming_msg.data[0] == 0x88){
+		CAN_MSG msg;
+		msg.mode = CAN_MODE_EXTENDED;
+		msg.ID = 0x10530112;
+		msg.RTR = 0;
+		msg.DLC = 1;
+
+		uint8_t data[1] = {0x04};
+		for (int i = 0; i<1; i++) {
+			msg.data[i] = data[i];
+		}
+		CAN_send_msg(msg);
+	}
+	if(incoming_msg.data[0] == 0x5D || incoming_msg.data[0] == 0x5E){
+		CAN_MSG msg;
+		msg.mode = CAN_MODE_EXTENDED;
+		msg.ID = 0x10530112;
+		msg.RTR = 0;
+		msg.DLC = 1;
+
+		uint8_t data2[1] = {0x00};
+		for (int i = 0; i<1; i++) {
+			msg.data[i] = data2[i];
+		}
+
+		CAN_send_msg(msg);
+	}
 }
 
