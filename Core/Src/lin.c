@@ -1,119 +1,135 @@
 #include "lin.h"
 
-//UART_Init() sets up the UART for a 8-bit data, No Parity, 1 Stop bit
-//at 9600 baud with transmitter interrupts enabled
-void UART_Init(void){
+GPIO_TypeDef * myGPIO = GPIOB;
+USART_TypeDef * myUSART = USART3;
+
+
+volatile uint8_t request_mode;
+volatile LIN_MSG* request_msg;
+
+/*--- UART INIT ---*/
+void LIN_config(void){
 	/* EXTI interrupt init*/
 	uint32_t prioritygroup = 0x00U;
 	prioritygroup = NVIC_GetPriorityGrouping();
-	NVIC_SetPriority(USART2_IRQn, NVIC_EncodePriority(prioritygroup, 15, 15));
+	NVIC_SetPriority(USART3_IRQn, NVIC_EncodePriority(prioritygroup, 15, 15));
 
 	/* Enable interrupt */
-	NVIC_EnableIRQ(USART2_IRQn);
+	NVIC_EnableIRQ(USART3_IRQn);
 
+	//Initialisation de PB10 comme MyUSART_TX et PB11 comme MyUSART_RX
+	/*Activation du port B*/
+	RCC->AHB1ENR &= ~(RCC_AHB1ENR_GPIOBEN_Msk);
+	RCC->AHB1ENR |= 0x1U << (RCC_AHB1ENR_GPIOBEN_Pos);
 
-	//Initialisation de PA2 comme USART2_TX et PA3 comme USART2_RX
-	/*Activation du port A*/
-	RCC->AHB1ENR &= ~(RCC_AHB1ENR_GPIOAEN_Msk);
-	RCC->AHB1ENR |= 0x1U << (RCC_AHB1ENR_GPIOAEN_Pos);
+    /* Setup PB10 and PB11 as Alternate Function */
+	myGPIO->MODER &= ~(GPIO_MODER_MODER10_Msk | GPIO_MODER_MODER11_Msk);
+	myGPIO->MODER |= 0b10U << (GPIO_MODER_MODER10_Pos) | 0b10U << (GPIO_MODER_MODER11_Pos);
 
-    /* Setup PA2 and PA3 as Alternate Function */
-	GPIOA->MODER &= ~(GPIO_MODER_MODER2_Msk | GPIO_MODER_MODER3_Msk);
-	GPIOA->MODER |= 0b10U << (GPIO_MODER_MODER2_Pos) | 0b10U << (GPIO_MODER_MODER3_Pos);
-
-	/* Setup Alternate function as USART2 */
-	GPIOA->AFR[0] &= ~(GPIO_AFRL_AFSEL2_Msk | GPIO_AFRL_AFSEL3_Msk);
-	GPIOA->AFR[0] |= 0x7U << (GPIO_AFRL_AFSEL2_Pos) | 0x7U << (GPIO_AFRL_AFSEL3_Pos);
+	/* Setup Alternate function as AF7 (USART1-2-3) */
+	myGPIO->AFR[1] &= ~(GPIO_AFRH_AFSEL10_Msk | GPIO_AFRH_AFSEL11_Msk);
+	myGPIO->AFR[1] |= 0x7U << (GPIO_AFRH_AFSEL10_Pos) | 0x7U << (GPIO_AFRH_AFSEL11_Pos);
 
 	/* Push pull output */
-	GPIOA->OTYPER &= ~(GPIO_OTYPER_OT0_Msk | GPIO_OTYPER_OT1_Msk);
-	GPIOA->OTYPER |= 0b1U << (GPIO_OTYPER_OT0_Pos) | 0b1U << (GPIO_OTYPER_OT1_Pos);
+	myGPIO->OTYPER &= ~(GPIO_OTYPER_OT10_Msk | GPIO_OTYPER_OT11_Msk);
+	myGPIO->OTYPER |= 0b1U << (GPIO_OTYPER_OT10_Pos) | 0b1U << (GPIO_OTYPER_OT11_Pos);
 
 	/* Pull up resistor on */
-	GPIOA->PUPDR &= ~(GPIO_PUPDR_PUPD2_Msk | GPIO_PUPDR_PUPD3_Msk);
-	GPIOA->PUPDR |= 0b1U << (GPIO_PUPDR_PUPD2_Pos) | 0b1U << (GPIO_PUPDR_PUPD3_Pos);
+	myGPIO->PUPDR &= ~(GPIO_PUPDR_PUPD10_Msk | GPIO_PUPDR_PUPD11_Msk);
+	myGPIO->PUPDR |= 0b1U << (GPIO_PUPDR_PUPD10_Pos) | 0b1U << (GPIO_PUPDR_PUPD11_Pos);
 
 	/* Output speed set to VeryHigh */
-	GPIOA->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED2_Msk | GPIO_OSPEEDR_OSPEED3_Msk);
-	GPIOA->OSPEEDR |= 0b11U << (GPIO_OSPEEDR_OSPEED2_Pos)
-			| 0b11U << (GPIO_OSPEEDR_OSPEED3_Pos);
+	myGPIO->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED10_Msk | GPIO_OSPEEDR_OSPEED11_Msk);
+	myGPIO->OSPEEDR |= 0b11U << (GPIO_OSPEEDR_OSPEED10_Pos) | 0b11U << (GPIO_OSPEEDR_OSPEED11_Pos);
 
 
-	//Activation de l'horloge de USART2
-	RCC->APB1ENR &= ~(RCC_APB1ENR_USART2EN_Msk);
-	RCC->APB1ENR |= 0x1U << (RCC_APB1ENR_USART2EN_Pos);
+	//Activation de l'horloge de MyUSART
+	RCC->APB1ENR &= ~(RCC_APB1ENR_USART3EN_Msk);
+	RCC->APB1ENR |= 0x1U << (RCC_APB1ENR_USART3EN_Pos);
 
 	/*Enable USART, no TE no RE yet, Oversampling = 8, 8bit mode, no parity
 	Enable Tx and Rx*/
-	USART2->CR1 &= ~(USART_CR1_OVER8_Msk | USART_CR1_RXNEIE_Msk | USART_CR1_TE_Msk | USART_CR1_RE_Msk);
-	USART2->CR1 |= 0b1U << (USART_CR1_OVER8_Pos)
-					| 0b0U << (USART_CR1_TE_Pos)
-					| 0b0U << (USART_CR1_RXNEIE_Pos)
-					| 0b0U << (USART_CR1_RE_Pos);
+	myUSART->CR1 &= ~(USART_CR1_OVER8_Msk
+			| USART_CR1_RXNEIE_Msk
+			| USART_CR1_TE_Msk
+			| USART_CR1_RE_Msk);
+	myUSART->CR1 |= 0b1U << (USART_CR1_OVER8_Pos) 	// Enable USART
+			| 0b0U << (USART_CR1_RXNEIE_Pos)		// Interrupt is inhibited
+			| 0b0U << (USART_CR1_TE_Pos)			// Transmitter disabled
+			| 0b0U << (USART_CR1_RE_Pos);			// Receiver disabled
 
-	/* LIN mode, STOP[1:0] and CLKEN cleared for LIN, No clock output (synchronous mode), LBDL to 1 for */
-	USART2->CR2 &= ~(USART_CR2_LINEN_Msk | USART_CR2_STOP_Msk | USART_CR2_CLKEN_Msk | USART_CR2_LBCL_Msk | USART_CR2_LBDL_Msk);
-	USART2->CR2 |= 0b1U << (USART_CR2_LINEN_Pos) | 0b0U << (USART_CR2_LBCL_Pos) | 0b00U << (USART_CR2_STOP_Pos) | 0b0U << (USART_CR2_CLKEN_Pos) | 0b1U << (USART_CR2_LBDL_Pos);
+	/* LIN mode, STOP and CLKEN cleared for LIN,  , LBDIE Break detection interrupt to 1*/
+	myUSART->CR2 &= ~(USART_CR2_LINEN_Msk
+			| USART_CR2_STOP_Msk
+			| USART_CR2_CLKEN_Msk
+			| USART_CR2_LBDL_Msk
+			| USART_CR2_LBCL_Msk
+			| USART_CR2_LBDIE_Msk);
+	myUSART->CR2 |= 0b1U << (USART_CR2_LINEN_Pos)	// LIN mode enabled
+			| 0b00U << (USART_CR2_STOP_Pos)			// 1 Stop bit
+			| 0b0U << (USART_CR2_CLKEN_Pos)			// CK pin disabled
+			| 0b0U << (USART_CR2_LBDL_Pos)   		// 10-bit break detection
+			| 0b1U << (USART_CR2_LBCL_Pos)   		// The clock pulse of the last data bit is output to the CK pin
+			| 0b1U << (USART_CR2_LBDIE_Pos);		// An interrupt is generated whenever LBD=1 in the USART_SR register
 
 	/*No control mode, 3 sample point, SCEN, HDSEL and IREN cleared for LIN*/
-	USART2->CR3 &= ~(USART_CR3_ONEBIT_Msk | USART_CR3_CTSE_Msk | USART_CR3_SCEN_Msk | USART_CR3_HDSEL_Msk | USART_CR3_IREN_Msk);
-	USART2->CR3 |= 0b0U << (USART_CR3_ONEBIT_Pos) | 0b0U << (USART_CR3_CTSE_Pos) | 0b0U << (USART_CR3_SCEN_Pos) | 0b0U << (USART_CR3_HDSEL_Pos) | 0b0U << (USART_CR3_IREN_Pos);
+	myUSART->CR3 &= ~(USART_CR3_ONEBIT_Msk
+			| USART_CR3_CTSE_Msk
+			| USART_CR3_SCEN_Msk
+			| USART_CR3_HDSEL_Msk
+			| USART_CR3_IREN_Msk);
+	myUSART->CR3 |= 0b0U << (USART_CR3_ONEBIT_Pos)	// Three sample bit method
+			| 0b0U << (USART_CR3_CTSE_Pos)			// CTS hardware flow control disable
+			| 0b0U << (USART_CR3_SCEN_Pos)			// Smartcard Mode disabled
+			| 0b0U << (USART_CR3_HDSEL_Pos)			// Half duplex mode is not selected
+			| 0b0U << (USART_CR3_IREN_Pos);			// IrDA disabled
 
-	/*19200bauds -> USARTDIV = 1093 -> Mantissa = 1093d=0x445 , Fraction = 0.0000*16 = 0d = 0x0*/
-	USART2->BRR &= ~(USART_BRR_DIV_Mantissa_Msk | USART_BRR_DIV_Fraction_Msk);
-	USART2->BRR |= 0x445U << (USART_BRR_DIV_Mantissa_Pos) | 0x0U << (USART_BRR_DIV_Fraction_Pos);
+	/*19200bauds -> Mantissa = 273 ; frac = 7 */
+	myUSART->BRR &= ~(USART_BRR_DIV_Mantissa_Msk | USART_BRR_DIV_Fraction_Msk);
+	myUSART->BRR |= 0x111U << (USART_BRR_DIV_Mantissa_Pos) | 0x7U << (USART_BRR_DIV_Fraction_Pos);
 
 	/*Enable UART*/
-	USART2->CR1 &= ~(USART_CR1_UE_Msk | USART_CR1_RXNEIE_Msk| USART_CR1_TE_Msk | USART_CR1_RE_Msk);
-	USART2->CR1 |= 0b1U << (USART_CR1_UE_Pos)
-		| 0b1U << (USART_CR1_TE_Pos)
-		| 0b1U << (USART_CR1_RXNEIE_Pos)
-		| 0b1U << (USART_CR1_RE_Pos);
+	myUSART->CR1 &= ~(USART_CR1_UE_Msk
+			| USART_CR1_RXNEIE_Msk
+			| USART_CR1_TE_Msk
+			| USART_CR1_RE_Msk);
+	myUSART->CR1 |= 0b1U << (USART_CR1_UE_Pos)	// reenable USART
+			| 0b1U << (USART_CR1_RXNEIE_Pos)	// An USART interrupt is generated whenever ORE=1 or RXNE=1 in the USART_SR
+			| 0b1U << (USART_CR1_TE_Pos)		// Transmitter is enabled
+			| 0b1U << (USART_CR1_RE_Pos);		// Receiver is enabled and begins searching for a start bit
 
 	HAL_Delay(1000);
 }
 
 /*--- Transmit LIN Message ---*/
-void SendMessage(LIN_MSG *msg) {
-
+void LIN_send_message(LIN_MSG *msg) {
+	sync_break();
+	UART_PutChar(SYNC_FRAME);
+	UART_PutChar(msg->PIDField);
+	for (int i = 0; i < msg->size; i++) {
+		UART_PutChar(msg->data[i]);
+	}
+	UART_PutChar(checksum(msg->size, msg->data));
 }
 
 /*--- Transmit LIN Request ---*/
-void SendRequest(LIN_MSG *msg) {
-
+void LIN_send_request(LIN_MSG *req) {
+	NVIC_DisableIRQ(USART3_IRQn);
+	sync_break();
+	UART_PutChar(SYNC_FRAME);
+	UART_PutChar(req->PIDField);
+	request_mode = 1;
+	request_msg = req;
+	NVIC_EnableIRQ(USART3_IRQn);
 }
 
 /*--- Send sync field and break ---*/
 void sync_break(void) {
-
-}
-
-/*--- Transmit char ---*/
-void UART_PutChar(uint8_t data) {
-	USART2->DR = data;
-	while(!(USART2->SR & USART_SR_TXE));		// donnee transferee au registre de decalage
-	while(!(USART2->SR & USART_SR_TC));		//fin de transmission
-}
-
-/*--- Read char ---*/
-uint8_t UART_GetChar(void) {
-	uint32_t SR_RXNE;
-	uint32_t i = 0;
-	uint32_t TIMEOUT = 10000;
-	do {
-		SR_RXNE = USART2->SR;		//copie des drapeaux
-		SR_RXNE &= USART_SR_RXNE;	//isolement du drapeau RXNE
-		i++;
-	} while (SR_RXNE != USART_SR_RXNE && i<TIMEOUT);
-	if (i<TIMEOUT) {
-		return USART2->DR;
-	} else {
-		return 0;					//en cas d'attente trop longue
-	}
+	myUSART->CR1 |= 0x1U << USART_CR1_SBK_Pos;
 }
 
 /*--- Calculate lin checksum ---*/
-uint8_t checksum(uint8_t length, uint8_t *data) {
+uint8_t checksum(uint8_t length, volatile uint8_t *data) {
 	uint8_t ix;
 	uint16_t check_sum = 0;
 
@@ -127,10 +143,101 @@ uint8_t checksum(uint8_t length, uint8_t *data) {
 	return (uint8_t)(0xff - check_sum);
 }
 
+/*--- Transmit char ---*/
+void UART_PutChar(uint8_t data) {
+	myUSART->DR = data;
+	while(!(myUSART->SR & USART_SR_TXE));		// donnee transferee au registre de decalage
+	while(!(myUSART->SR & USART_SR_TC));		// fin de transmission
+}
 
-void USART2_IRQHandler(void) {
-	uint8_t chn[30];
-	uint32_t len;
+/*--- Read char ---*/
+uint8_t UART_GetChar(void) {
+	uint32_t SR_RXNE;
+	uint32_t i = 0;
+	uint32_t TIMEOUT = 10000;
+	do {
+		SR_RXNE = myUSART->SR;		//copie des drapeaux
+		SR_RXNE &= USART_SR_RXNE;	//isolement du drapeau RXNE
+		i++;
+	} while (SR_RXNE != USART_SR_RXNE && i<TIMEOUT);
+	if (i<TIMEOUT) {
+		return myUSART->DR;
+	} else {
+		return ERR_TIMEOUT;			//en cas d'attente trop longue
+	}
+}
 
-	/** insert you code there **/
+void LIN_read_message_content(volatile LIN_MSG* msg) {
+	for (int i = 0; i < msg->size; i++) {
+		msg->data[i] = UART_GetChar();
+	}
+	uint8_t actual_check_sum = UART_GetChar();
+	uint8_t check_sum = checksum(msg->size, msg->data);
+	if (check_sum != actual_check_sum) {
+		msg->size = 0;
+	}
+}
+
+void USART3_IRQHandler(void) {
+	if (myUSART->SR & USART_SR_LBD_Msk) {
+		myUSART->SR &= ~(USART_SR_LBD_Msk);
+		// no frame
+		// awnser: recieve the result of a previous request
+		if (request_mode) {
+			request_mode = 0;
+			handle_awnser();
+			return;
+		}
+
+		// with frames
+		UART_GetChar(); //void sync frame
+		uint16_t PID = UART_GetChar(); //retrieve PID frame
+
+		// data: recieve only data (UID starting by 1 // arbitrary)
+		if (PID & 0x80) {
+			handle_data(PID & ~(0x80));
+			return;
+		}
+
+		// request: recieve a request that have to be awnsered (UID starting by 0 // arbitrary)
+		if (!(PID & 0x80)) {
+			handle_request(PID & ~(0x80));
+			return;
+		}
+	}
+}
+
+void handle_awnser() {
+	LIN_read_message_content(request_msg);
+
+	/**
+	 * request_msg must be threated there
+	**/
+}
+
+void handle_data(uint16_t ID) {
+	LIN_MSG* receved_msg;
+	receved_msg->PIDField = ID;
+	receved_msg->size = ID & 0x0F;	//arbitraire
+	LIN_read_message_content(receved_msg);
+
+	/**
+	 * receved_msg must be threated there
+	**/
+}
+
+void handle_request(uint16_t ID) {
+	uint8_t size = ID & 0x0F;  //arbitraire
+
+	/** data to sent must be created there ----------------------------**/
+	/** USER CODE BEGIN **/
+	uint8_t data[16] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'};
+
+	/** USER CODE END **/
+
+	uint8_t actual_check_sum = checksum(size, data);
+	for (int i = 0; i < size; i++) {
+		UART_PutChar(data[i]);
+	}
+	UART_PutChar(actual_check_sum);
 }

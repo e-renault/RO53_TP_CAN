@@ -3,32 +3,37 @@
 
 #include "stm32f4xx.h"
 
-#include "lin.h"
+#define SYNC_FRAME (0x55U)
+#define ERR_TIMEOUT (0xFFU)
 
 typedef struct{
-	uint8_t mode;//Standard or extended
-	uint32_t ID;
-	uint8_t RTR;
-	uint8_t DLC;
-	uint8_t data[8];
+	uint16_t PIDField;	//10bits
+	uint8_t data[16];	//8bits but 10 in reality
+	uint8_t size;
 }LIN_MSG;
 
-void UART_Init(void);
+void LIN_config(void);
 
-void SendMessage(LINMSG *msg);
+void LIN_send_message(LIN_MSG *msg);
 
-void SendRequest(LINMSG *msg);
+void LIN_send_request(LIN_MSG *req);
 
 void sync_break(void);
+
+uint8_t checksum(uint8_t length, volatile uint8_t *data);
 
 void UART_PutChar(uint8_t data);
 
 uint8_t UART_GetChar(void);
 
-uint8_t checksum(uint8_t length, uint8_t *data);
+void LIN_read_message_content(volatile LIN_MSG* msg);
 
-void USART2_IRQHandler(void);
+void USART3_IRQHandler(void);
 
+void handle_awnser();
 
+void handle_data(uint16_t ID);
+
+void handle_request(uint16_t ID);
 
 #endif /* __LIN_H */
