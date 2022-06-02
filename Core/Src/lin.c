@@ -153,8 +153,8 @@ void UART_PutChar(uint8_t data) {
 /*--- Read char ---*/
 uint8_t UART_GetChar(void) {
 	uint32_t SR_RXNE;
-	uint32_t i = 0;
-	uint32_t TIMEOUT = 10000;
+	volatile uint32_t i = 0;
+	uint32_t TIMEOUT = 1000000;
 	do {
 		SR_RXNE = myUSART->SR;		//copie des drapeaux
 		SR_RXNE &= USART_SR_RXNE;	//isolement du drapeau RXNE
@@ -179,23 +179,25 @@ void LIN_read_message_content(volatile LIN_MSG* msg) {
 }
 
 void USART3_IRQHandler(void) {
+	// no frame
+	// awnser: recieve the result of a previous request
+	if (request_mode) {
+		request_mode = 0;
+		handle_awnser();
+		return;
+	}
+
 	if (myUSART->SR & USART_SR_LBD_Msk) {
 		myUSART->SR &= ~(USART_SR_LBD_Msk);
-		// no frame
-		// awnser: recieve the result of a previous request
-		if (request_mode) {
-			request_mode = 0;
-			handle_awnser();
-			return;
-		}
 
 		// with frames
-		UART_GetChar(); //void sync frame
-		uint16_t PID = UART_GetChar(); //retrieve PID frame
+		uint8_t break_frame = UART_GetChar(); //void break frame
+		uint8_t sync_frame = UART_GetChar(); //void sync frame
+		uint8_t PID = UART_GetChar(); //retrieve PID frame
 
 		// data: recieve only data (UID starting by 1 // arbitrary)
 		if (PID & 0x80) {
-			handle_data(PID & ~(0x80));
+			handle_data((uint16_t) PID & ~(0x80));
 			return;
 		}
 
@@ -216,10 +218,10 @@ void handle_awnser() {
 }
 
 void handle_data(uint16_t ID) {
-	LIN_MSG* receved_msg;
-	receved_msg->PIDField = ID;
-	receved_msg->size = ID & 0x0F;	//arbitraire
-	LIN_read_message_content(receved_msg);
+	LIN_MSG receved_msg;
+	receved_msg.PIDField = ID;
+	receved_msg.size = 8;	//arbitraire
+	LIN_read_message_content(&receved_msg);
 
 	/**
 	 * receved_msg must be threated there
@@ -227,7 +229,7 @@ void handle_data(uint16_t ID) {
 }
 
 void handle_request(uint16_t ID) {
-	uint8_t size = ID & 0x0F;  //arbitraire
+	uint8_t size = 8;  //arbitraire
 
 	/** data to sent must be created there ----------------------------**/
 	/** USER CODE BEGIN **/
