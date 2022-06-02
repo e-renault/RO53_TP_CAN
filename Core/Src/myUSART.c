@@ -70,7 +70,7 @@ void USART_config(void){
 
 	HAL_Delay(1000);
 
-	myPrintln("connection established !");
+	USART_send_message("connection established !");
 }
 
 void myPrintChar(char c)						// affiche un caractere unique sur le terminal
@@ -128,7 +128,6 @@ int USART2_Receive(uint8_t * data, uint32_t len) {//data l'adresse d'enregistrem
 
 void USART2_IRQHandler(void) {
 	uint8_t chn[30];
-	uint32_t len;
 
 	len = USART2_Receive(chn, 30);
 
