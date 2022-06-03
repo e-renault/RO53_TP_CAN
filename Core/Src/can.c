@@ -66,7 +66,10 @@ void CAN_config(){
 	while(!(CAN->MSR & CAN_MSR_INAK)); //0x1
 
 	//set a filter that let all pass
+	//Filtre sur les messages envoyes par la maquette
 	CAN_set_filter(0, CAN_FILTER_SCALE_32BIT, CAN_FILTER_MODE_MASK, CAN_FILTER_FIFO0_, 0x10FF50FF, 0xFF00FF00);
+	//Filtre sur les réponses qui nous sont envoyees
+	CAN_set_filter(1, CAN_FILTER_SCALE_32BIT, CAN_FILTER_MODE_MASK, CAN_FILTER_FIFO0_, 0x1001FFFF, 0xFFFF0000);
 }
 
 
@@ -137,6 +140,7 @@ int CAN_send_msg(CAN_MSG msg) {
 
 CAN_MSG incoming_msg;
 void CAN1_RX0_IRQHandler(void) {
+	extern int activate;
 	incoming_msg.mode = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_IDE_Msk) >> CAN_TI0R_IDE_Pos;
 	if (incoming_msg.mode == CAN_MODE_STANDARD) {
 		incoming_msg.ID = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_STID_Msk) >> CAN_TI0R_STID_Pos;
@@ -150,23 +154,43 @@ void CAN1_RX0_IRQHandler(void) {
 	}
 	CAN1->RF0R |= 0b1UL << CAN_RF0R_RFOM0_Pos;
 
-	if(incoming_msg.data[0] == 0x88){
-		allumerClignotant();
-	}
-	if(incoming_msg.data[0] == 0x5D || incoming_msg.data[0] == 0x5E){
-		eteindreClignotant();
+	if((incoming_msg.ID & 0x00110000) == 0x010000){
+		//Gestion des reponses a nos requetes de donnees
+		switch(incoming_msg.data[0]){
+		case 0x0E:
+		case 0x0D:
+			//Activer le clignotement
+			activate = 1;
+			break;
+		case 0x1E:
+		case 0x1D:
+			//Desactiver le clignotement
+			activate = 0;
+			break;
+		}
+	}else{
+		//Gestion des requetes envoyees sur le CAN
+		switch(incoming_msg.data[0]){
+			case 0x88:
+				allumerClignotant(0x10530112, 0x04);
+				break;
+			case 0x5D:
+			case 0x5E:
+				eteindreClignotant(0x10530112);
+				break;
+		}
 	}
 }
 
 
-void allumerClignotant(){
+void allumerClignotant(uint32_t id, uint8_t value){
 	CAN_MSG msg;
 	msg.mode = CAN_MODE_EXTENDED;
-	msg.ID = 0x10530112;
+	msg.ID = id;
 	msg.RTR = 0;
 	msg.DLC = 1;
 
-	uint8_t data[1] = {0x04};
+	uint8_t data[1] = {value};
 	for (int i = 0; i<1; i++) {
 		msg.data[i] = data[i];
 	}
@@ -175,17 +199,15 @@ void allumerClignotant(){
 
 
 
-void eteindreClignotant(){
+void eteindreClignotant(uint32_t id){
 	CAN_MSG msg;
 	msg.mode = CAN_MODE_EXTENDED;
-	msg.ID = 0x10530112;
+	msg.ID = id;
 	msg.RTR = 0;
 	msg.DLC = 1;
 
 	uint8_t data2[1] = {0x00};
-	for (int i = 0; i<1; i++) {
-		msg.data[i] = data2[i];
-	}
+	msg.data[0] = data2[0];
 
 	CAN_send_msg(msg);
 }
