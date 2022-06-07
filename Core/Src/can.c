@@ -164,34 +164,33 @@ void CAN1_RX0_IRQHandler(void) {
 	incoming_msg_CAN_flag = 1;
 
 	//retrieve CAN mode (std or extanded)
-	incoming_msg.mode = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_IDE_Msk) >> CAN_TI0R_IDE_Pos;
+	incoming_msg_CAN.mode = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_IDE_Msk) >> CAN_TI0R_IDE_Pos;
 
 	//retrieve UID depending on the mode
-	if (incoming_msg.mode == CAN_MODE_STANDARD) {
-		incoming_msg.ID = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_STID_Msk) >> CAN_TI0R_STID_Pos;
+	if (incoming_msg_CAN.mode == CAN_MODE_STANDARD) {
+		incoming_msg_CAN.ID = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_STID_Msk) >> CAN_TI0R_STID_Pos;
 	} else {
-		incoming_msg.ID = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_EXID_Msk) >> CAN_TI0R_EXID_Pos;
+		incoming_msg_CAN.ID = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_EXID_Msk) >> CAN_TI0R_EXID_Pos;
 	}
 	// data or request mode
-	incoming_msg.RTR = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_RTR_Msk) >> CAN_TI0R_RTR_Pos;
+	incoming_msg_CAN.RTR = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_RTR_Msk) >> CAN_TI0R_RTR_Pos;
 
 	// retrieve lenght
-	incoming_msg.DLC = CAN1->sFIFOMailBox[0].RDTR & CAN_RDT0R_DLC_Msk;
+	incoming_msg_CAN.DLC = CAN1->sFIFOMailBox[0].RDTR & CAN_RDT0R_DLC_Msk;
 	for (int i = 0, shift = 0; i<8; i++, shift += 8) {
-		incoming_msg.data[i] = (CAN1->sFIFOMailBox[0].RDLR >> shift) & 0xFF;
+		incoming_msg_CAN.data[i] = (CAN1->sFIFOMailBox[0].RDLR >> shift) & 0xFF;
 	}
 
 	// say that the tram has been red
 	CAN1->RF0R |= 0b1UL << CAN_RF0R_RFOM0_Pos;
 
 
-
 	/** Your code there**/
 	extern int activate;
 	//Gestion des donnees recues
-	if((incoming_msg.ID & 0x00110000) == (CAN_MASTER_ID << 16)){
+	if((incoming_msg_CAN.ID & 0x00110000) == (CAN_MASTER_ID << 16)){
 		//Gestion des reponses a nos requetes de donnees
-		switch(incoming_msg.data[0]){
+		switch(incoming_msg_CAN.data[0]){
 		case 0x0E://Bague essuie glace arriere sur le premier cran
 		case 0x0D:
 		case 0x0B:
@@ -209,7 +208,7 @@ void CAN1_RX0_IRQHandler(void) {
 		uint32_t msg_id = 0;
 		uint8_t data[1]={CAN_LIGHT_OFF};
 		//Gestion des requetes envoyees sur le CAN
-		switch(incoming_msg.data[0]){
+		switch(incoming_msg_CAN.data[0]){
 			case 0x88://Bouton SET+ du commodo
 				//Allumer le clignotant arriere gauche
 				msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;

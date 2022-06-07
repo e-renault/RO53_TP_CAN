@@ -51,6 +51,7 @@
 #if defined(__ICCARM__) || defined(__CC_ARM) || defined(__GNUC__)
   #include <stdint.h>
   extern uint32_t SystemCoreClock;
+  void xPortSysTickHandler(void);
 #endif
 #define configENABLE_FPU                         0
 #define configENABLE_MPU                         0
@@ -86,7 +87,7 @@
 to exclude the API function. */
 #define INCLUDE_vTaskPrioritySet             1
 #define INCLUDE_uxTaskPriorityGet            1
-#define INCLUDE_vTaskDelete                  0
+#define INCLUDE_vTaskDelete                  1
 #define INCLUDE_vTaskCleanUpResources        0
 #define INCLUDE_vTaskSuspend                 1
 #define INCLUDE_vTaskDelayUntil              0
@@ -132,7 +133,7 @@ standard names. */
 /* IMPORTANT: This define is commented when used with STM32Cube firmware, when the timebase source is SysTick,
               to prevent overwriting SysTick_Handler defined within STM32Cube HAL */
 
-#define xPortSysTickHandler SysTick_Handler
+/* #define xPortSysTickHandler SysTick_Handler */
 
 /* USER CODE BEGIN Defines */
 /* Section where parameter definitions can be added (for instance, to override default ones in FreeRTOS.h) */

@@ -1,5 +1,8 @@
 #include "lin.h"
 
+volatile uint8_t request_mode_LIN;
+volatile LIN_MSG* request_msg_LIN;
+
 GPIO_TypeDef * myGPIO = GPIOB;
 USART_TypeDef * myUSART = USART3;
 
@@ -206,8 +209,6 @@ void LIN_read_message_content(volatile LIN_MSG* msg) {
 	}
 }
 
-volatile uint8_t request_mode_LIN;
-volatile LIN_MSG* request_msg_LIN;
 void USART3_IRQHandler(void) {
 	// no frame
 	// awnser: recieve the result of a previous request
@@ -248,7 +249,7 @@ void handle_awnser() {
 }
 
 volatile LIN_MSG receved_msg;
-volatile LIN_MSG receved_msg_flag;
+volatile int receved_msg_flag;
 void handle_data(uint16_t ID) {
 	receved_msg_flag = 1;
 	receved_msg.PIDField = ID;
