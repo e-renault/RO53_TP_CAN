@@ -42,7 +42,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-osThreadId defaultTaskHandle;
+osThreadId taskTestCommandHandle;
+osThreadId taskClignoterHandle;
 /* USER CODE BEGIN PV */
 extern CAN_MSG incoming_msg_CAN;
 int activate = 0;
@@ -51,7 +52,8 @@ int activate = 0;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-void StartDefaultTask(void const * argument);
+void freeRTOSTestCommand(void const * argument);
+void freeRTOSClignoter(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -113,9 +115,13 @@ int main(void)
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
-  /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
-  defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+  /* definition and creation of taskTestCommand */
+  osThreadDef(taskTestCommand, freeRTOSTestCommand, osPriorityBelowNormal, 0, 128);
+  taskTestCommandHandle = osThreadCreate(osThread(taskTestCommand), NULL);
+
+  /* definition and creation of taskClignoter */
+  osThreadDef(taskClignoter, freeRTOSClignoter, osPriorityNormal, 0, 128);
+  taskClignoterHandle = osThreadCreate(osThread(taskClignoter), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -156,8 +162,8 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 336;
+  RCC_OscInitStruct.PLL.PLLM = 4;
+  RCC_OscInitStruct.PLL.PLLN = 168;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 7;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
@@ -186,10 +192,22 @@ void SystemClock_Config(void)
   */
 static void MX_GPIO_Init(void)
 {
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOH_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
+
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(GPIOD, LED_Vert_Pin|LED_Orange_Pin|LED_Rouge_Pin|LED_Bleu_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pins : LED_Vert_Pin LED_Orange_Pin LED_Rouge_Pin LED_Bleu_Pin */
+  GPIO_InitStruct.Pin = LED_Vert_Pin|LED_Orange_Pin|LED_Rouge_Pin|LED_Bleu_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
 }
 
@@ -197,14 +215,14 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE END 4 */
 
-/* USER CODE BEGIN Header_StartDefaultTask */
+/* USER CODE BEGIN Header_freeRTOSTestCommand */
 /**
-  * @brief  Function implementing the defaultTask thread.
+  * @brief  Function implementing the taskTestCommand thread.
   * @param  argument: Not used
   * @retval None
   */
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void const * argument)
+/* USER CODE END Header_freeRTOSTestCommand */
+void freeRTOSTestCommand(void const * argument)
 {
   /* USER CODE BEGIN 5 */
   /* Infinite loop */
@@ -220,6 +238,66 @@ void StartDefaultTask(void const * argument)
 	  osDelay(100);
   }
   /* USER CODE END 5 */
+}
+
+/* USER CODE BEGIN Header_freeRTOSClignoter */
+/**
+* @brief Function implementing the taskClignoter thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_freeRTOSClignoter */
+void freeRTOSClignoter(void const * argument)
+{
+  /* USER CODE BEGIN freeRTOSClignoter */
+	  osDelay(500);
+	  int allume = 0;
+	  /* Infinite loop */
+	  for(;;)
+	  {
+		  HAL_GPIO_TogglePin(LED_Rouge_GPIO_Port, LED_Rouge_Pin);
+		  if(allume){
+			  //eteindreClignotant(0x10530112);
+
+			  uint32_t msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
+			  uint8_t data[1] = {CAN_LIGHT_OFF};
+			  CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
+
+			  allume = 0;
+		  }else if (activate){
+			  //allumerClignotant(0x10530112, 0x04);
+
+			  uint32_t msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
+			  uint8_t data[1] = {CAN_LIGHT_LEFT_REAR_TURN_SIGNAL_ON};
+			  CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
+
+			  allume = 1;
+		  }
+		  osDelay(1000);
+	  }
+
+  /* USER CODE END freeRTOSClignoter */
+}
+
+ /**
+  * @brief  Period elapsed callback in non blocking mode
+  * @note   This function is called  when TIM6 interrupt took place, inside
+  * HAL_TIM_IRQHandler(). It makes a direct call to HAL_IncTick() to increment
+  * a global variable "uwTick" used as application time base.
+  * @param  htim : TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  /* USER CODE BEGIN Callback 0 */
+
+  /* USER CODE END Callback 0 */
+  if (htim->Instance == TIM6) {
+    HAL_IncTick();
+  }
+  /* USER CODE BEGIN Callback 1 */
+
+  /* USER CODE END Callback 1 */
 }
 
 /**
@@ -254,3 +332,4 @@ void assert_failed(uint8_t *file, uint32_t line)
 }
 #endif /* USE_FULL_ASSERT */
 
+/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

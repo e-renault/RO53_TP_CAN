@@ -199,7 +199,7 @@ void CAN1_RX0_IRQHandler(void) {
 			break;
 		case 0x1E://Bague essuie glace arriere sur le 0
 		case 0x1D:
-		case 0x01:
+		case 0x1B:
 			//Desactiver le clignotement
 			activate = 0;
 			break;
