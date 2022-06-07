@@ -3,10 +3,6 @@
 GPIO_TypeDef * myGPIO = GPIOB;
 USART_TypeDef * myUSART = USART3;
 
-
-volatile uint8_t request_mode;
-volatile LIN_MSG* request_msg;
-
 /*--- UART INIT ---*/
 void LIN_config(void){
 	/* EXTI interrupt init*/
@@ -103,6 +99,9 @@ void LIN_config(void){
 
 /*--- Transmit LIN Message ---*/
 void LIN_send_message(LIN_MSG *msg) {
+	//disable IRQ to ensure that the transmission goes right
+	NVIC_DisableIRQ(USART3_IRQn);
+
 	// send 10 bits in low position to announce the beginning of a trame
 	sync_break();
 
@@ -119,16 +118,32 @@ void LIN_send_message(LIN_MSG *msg) {
 
 	// send checksum
 	UART_PutChar(checksum(msg->size, msg->data));
+
+	//reenable IRQ
+	NVIC_EnableIRQ(USART3_IRQn);
 }
 
 /*--- Transmit LIN Request ---*/
 void LIN_send_request(LIN_MSG *req) {
+	//disable IRQ to ensure that the transmission goes right
 	NVIC_DisableIRQ(USART3_IRQn);
+
+	// send 10 bits in low position to announce the beginning of a trame
 	sync_break();
+
+	// send 0b01010101 to sync devices
 	UART_PutChar(SYNC_FRAME);
+
+	// send PID
 	UART_PutChar(req->PIDField);
-	request_mode = 1;
-	request_msg = req;
+
+	//set request MODE (the device wait for a response)
+	request_mode_LIN = 1;
+
+	//set where the response must be stored
+	request_msg_LIN = req;
+
+	//reenable IRQ
 	NVIC_EnableIRQ(USART3_IRQn);
 }
 
@@ -191,11 +206,13 @@ void LIN_read_message_content(volatile LIN_MSG* msg) {
 	}
 }
 
+volatile uint8_t request_mode_LIN;
+volatile LIN_MSG* request_msg_LIN;
 void USART3_IRQHandler(void) {
 	// no frame
 	// awnser: recieve the result of a previous request
-	if (request_mode) {
-		request_mode = 0;
+	if (request_mode_LIN) {
+		request_mode_LIN = 0;
 		handle_awnser();
 		return;
 	}
@@ -223,15 +240,17 @@ void USART3_IRQHandler(void) {
 }
 
 void handle_awnser() {
-	LIN_read_message_content(request_msg);
+	LIN_read_message_content(request_msg_LIN);
 
 	/**
-	 * request_msg must be threated there
+	 * request_msg_LIN must be threated there
 	**/
 }
 
+volatile LIN_MSG receved_msg;
+volatile LIN_MSG receved_msg_flag;
 void handle_data(uint16_t ID) {
-	LIN_MSG receved_msg;
+	receved_msg_flag = 1;
 	receved_msg.PIDField = ID;
 	receved_msg.size = 8;	//arbitraire
 	LIN_read_message_content(&receved_msg);

@@ -23,6 +23,8 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "can.h"
+#include "lin.h"
+#include "myUSART.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -43,7 +45,7 @@
 osThreadId taskTestCommandHandle;
 osThreadId taskClignoterHandle;
 /* USER CODE BEGIN PV */
-extern CAN_MSG incoming_msg;
+extern CAN_MSG incoming_msg_CAN;
 int activate = 0;
 /* USER CODE END PV */
 
@@ -92,6 +94,8 @@ int main(void)
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
   CAN_config();
+  LIN_config();
+  USART_config();
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */

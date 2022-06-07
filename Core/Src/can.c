@@ -4,17 +4,18 @@
 CAN_TypeDef *CAN = CAN1;
 
 void CAN_config(){
+	//enable GPIO B
 	RCC->AHB1ENR |= RCC_AHB1ENR_GPIOBEN;
 
+	// set up PINs PB 8 and PB 9
 	GPIO_TypeDef *PB = GPIOB;
-	//application des masques
 	PB->MODER 	&= ~(GPIO_MODER_MODER8_Msk 		| GPIO_MODER_MODER9_Msk);
 	PB->OTYPER 	&= ~(GPIO_OTYPER_OT8_Msk 		| GPIO_OTYPER_OT9_Msk);
 	PB->PUPDR 	&= ~(GPIO_PUPDR_PUPD8_Msk 		| GPIO_PUPDR_PUPD9_Msk);
 	PB->OSPEEDR &= ~(GPIO_OSPEEDR_OSPEED8_Msk 	| GPIO_OSPEEDR_OSPEED9_Msk);
 	PB->AFR[1] 	&= ~(GPIO_AFRH_AFSEL8_Msk 		| GPIO_AFRH_AFSEL9_Msk);
 
-	//modification des constantes
+	//set mode
 	PB->MODER 	|= (0b10U << GPIO_MODER_MODER8_Pos 	| 0b10U << GPIO_MODER_MODER9_Pos); //mode sortie
 	PB->OTYPER 	|= (0U << GPIO_OTYPER_OT8_Pos 		| 0U << GPIO_OTYPER_OT9_Pos); //mode push-pull
 	PB->PUPDR 	|= (0U << GPIO_PUPDR_PUPD8_Pos 		| 0U << GPIO_PUPDR_PUPD9_Pos); //pas de resistance pull up/down
@@ -31,12 +32,13 @@ void CAN_config(){
 	while(!(CAN->MSR & CAN_MSR_SLAK)); //0x2
 
 	//Enter initialization mode
-	CAN->MCR |= CAN_MCR_INRQ; //0x00000001;
+	CAN->MCR |= CAN_MCR_INRQ;
+
 	//Wait for initialization mode
 	while(!(CAN->MSR & CAN_MSR_INAK)); //0x1
 
 	//Set config
-	CAN->MCR &= CAN_MCR_INRQ; //0x00000001;
+	CAN->MCR &= CAN_MCR_INRQ;
 
 	//Set bit Timing
 	CAN->BTR = (0b0U << CAN_BTR_LBKM_Pos |
@@ -68,6 +70,7 @@ void CAN_config(){
 	//set a filter that let all pass
 	//Filtre sur les messages envoyes par la maquette
 	CAN_set_filter(0, CAN_FILTER_SCALE_32BIT, CAN_FILTER_MODE_MASK, CAN_FILTER_FIFO0_, 0x10FF50FF, 0xFF00FF00);
+
 	//Filtre sur les réponses qui nous sont envoyees
 	CAN_set_filter(1, CAN_FILTER_SCALE_32BIT, CAN_FILTER_MODE_MASK, CAN_FILTER_FIFO0_, 0x1001FFFF, 0xFFFF0000);
 }
@@ -119,16 +122,20 @@ int CAN_send_msg(uint8_t can_mode, uint32_t msg_id, uint8_t msg_rtr, uint8_t msg
 		msg.data[i] = msg_data[i];
 	}
 
-	//Envoie du message
+	//send message
 	if (CAN1->TSR & CAN_TSR_TME0_Msk) {
+
+		// set id mode (stadnard or extanded)
 		if (msg.mode == CAN_MODE_STANDARD) {
 			CAN1->sTxMailBox[0].TIR = (msg.ID << CAN_TI0R_STID_Pos) | (msg.RTR << CAN_TI0R_RTR_Pos);
 		} else {
 			CAN1->sTxMailBox[0].TIR = (msg.ID << CAN_TI0R_EXID_Pos) | (msg.RTR << CAN_TI0R_RTR_Pos) | (0b1UL << CAN_TI0R_IDE_Pos);
 		}
 
+		// set the DLS (size)
 		CAN1->sTxMailBox[0].TDTR = msg.DLC;
 
+		// put data in the good order
 		CAN1->sTxMailBox[0].TDLR =
 				msg.data[3] << 24 |
 				msg.data[2] << 16 |
@@ -150,22 +157,37 @@ int CAN_send_msg(uint8_t can_mode, uint32_t msg_id, uint8_t msg_rtr, uint8_t msg
 	}
 }
 
-CAN_MSG incoming_msg;
+volatile CAN_MSG incoming_msg_CAN;
+volatile int incoming_msg_CAN_flag;
 void CAN1_RX0_IRQHandler(void) {
-	extern int activate;
+	//set a flag to say that a new message is unread
+	incoming_msg_CAN_flag = 1;
+
+	//retrieve CAN mode (std or extanded)
 	incoming_msg.mode = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_IDE_Msk) >> CAN_TI0R_IDE_Pos;
+
+	//retrieve UID depending on the mode
 	if (incoming_msg.mode == CAN_MODE_STANDARD) {
 		incoming_msg.ID = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_STID_Msk) >> CAN_TI0R_STID_Pos;
 	} else {
 		incoming_msg.ID = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_EXID_Msk) >> CAN_TI0R_EXID_Pos;
 	}
+	// data or request mode
 	incoming_msg.RTR = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_RTR_Msk) >> CAN_TI0R_RTR_Pos;
+
+	// retrieve lenght
 	incoming_msg.DLC = CAN1->sFIFOMailBox[0].RDTR & CAN_RDT0R_DLC_Msk;
 	for (int i = 0, shift = 0; i<8; i++, shift += 8) {
 		incoming_msg.data[i] = (CAN1->sFIFOMailBox[0].RDLR >> shift) & 0xFF;
 	}
+
+	// say that the tram has been red
 	CAN1->RF0R |= 0b1UL << CAN_RF0R_RFOM0_Pos;
 
+
+
+	/** Your code there**/
+	extern int activate;
 	//Gestion des donnees recues
 	if((incoming_msg.ID & 0x00110000) == (CAN_MASTER_ID << 16)){
 		//Gestion des reponses a nos requetes de donnees
@@ -183,7 +205,7 @@ void CAN1_RX0_IRQHandler(void) {
 			activate = 0;
 			break;
 		}
-	}else{
+	} else {
 		uint32_t msg_id = 0;
 		uint8_t data[1]={CAN_LIGHT_OFF};
 		//Gestion des requetes envoyees sur le CAN
