@@ -25,6 +25,7 @@
 #include "can.h"
 #include "lin.h"
 #include "myUART.h"
+#include "stm32f4xx_hal_gpio.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -44,8 +45,9 @@
 /* Private variables ---------------------------------------------------------*/
 osThreadId taskTestCommandHandle;
 osThreadId taskClignoterHandle;
+osThreadId taskHandleLINHandle;
+osThreadId taskHandleCANHandle;
 /* USER CODE BEGIN PV */
-extern CAN_MSG incoming_msg_CAN;
 int activate = 0;
 /* USER CODE END PV */
 
@@ -54,6 +56,8 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 void freeRTOSTestCommand(void const * argument);
 void freeRTOSClignoter(void const * argument);
+void StartTaskHandleLIN(void const * argument);
+void StartTaskHandleCAN(void const * argument);
 
 /* USER CODE BEGIN PFP */
 
@@ -122,6 +126,14 @@ int main(void)
   /* definition and creation of taskClignoter */
   osThreadDef(taskClignoter, freeRTOSClignoter, osPriorityNormal, 0, 128);
   taskClignoterHandle = osThreadCreate(osThread(taskClignoter), NULL);
+
+  /* definition and creation of taskHandleLIN */
+  osThreadDef(taskHandleLIN, StartTaskHandleLIN, osPriorityIdle, 0, 128);
+  taskHandleLINHandle = osThreadCreate(osThread(taskHandleLIN), NULL);
+
+  /* definition and creation of taskHandleCAN */
+  osThreadDef(taskHandleCAN, StartTaskHandleCAN, osPriorityLow, 0, 128);
+  taskHandleCANHandle = osThreadCreate(osThread(taskHandleCAN), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -252,12 +264,15 @@ void freeRTOSClignoter(void const * argument)
   /* USER CODE BEGIN freeRTOSClignoter */
 	  osDelay(500);
 	  int allume = 0;
+	  char msg_eteindre[9]="eteindre";
+	  char msg_allumer[8]="allumer";
 	  /* Infinite loop */
 	  for(;;)
 	  {
 		  HAL_GPIO_TogglePin(LED_Rouge_GPIO_Port, LED_Rouge_Pin);
 		  if(allume){
 			  //eteindreClignotant(0x10530112);
+			  USART_send_message(msg_eteindre);
 
 			  uint32_t msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
 			  uint8_t data[1] = {CAN_LIGHT_OFF};
@@ -266,6 +281,7 @@ void freeRTOSClignoter(void const * argument)
 			  allume = 0;
 		  }else if (activate){
 			  //allumerClignotant(0x10530112, 0x04);
+			  USART_send_message(msg_allumer);
 
 			  uint32_t msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
 			  uint8_t data[1] = {CAN_LIGHT_LEFT_REAR_TURN_SIGNAL_ON};
@@ -277,6 +293,99 @@ void freeRTOSClignoter(void const * argument)
 	  }
 
   /* USER CODE END freeRTOSClignoter */
+}
+
+/* USER CODE BEGIN Header_StartTaskHandleLIN */
+/**
+* @brief Function implementing the taskHandleLIN thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTaskHandleLIN */
+void StartTaskHandleLIN(void const * argument)
+{
+  /* USER CODE BEGIN StartTaskHandleLIN */
+  extern volatile int received_msg_LIN_flag;
+  extern volatile LIN_MSG received_msg_LIN;
+  /* Infinite loop */
+  for(;;)
+  {
+	if(received_msg_LIN_flag){
+		received_msg_LIN_flag = 0;
+		if((received_msg_LIN.PIDField & 0b1110000) == 0b0010000){
+			if(received_msg_LIN.data[0]){
+				HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, 1);
+			}else{
+				HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, 0);
+			}
+		}
+	}
+	//Cas du request
+	//HAL_GPIO_ReadPin(GPIOx, GPIO_Pin)
+
+    osDelay(1);
+  }
+  /* USER CODE END StartTaskHandleLIN */
+}
+
+/* USER CODE BEGIN Header_StartTaskHandleCAN */
+/**
+* @brief Function implementing the taskHandleCAN thread.
+* @param argument: Not used
+* @retval None
+*/
+/* USER CODE END Header_StartTaskHandleCAN */
+void StartTaskHandleCAN(void const * argument)
+{
+  /* USER CODE BEGIN StartTaskHandleCAN */
+  extern volatile CAN_MSG incoming_msg_CAN;
+  extern volatile int incoming_msg_CAN_flag;
+  /* Infinite loop */
+  for(;;)
+  {
+	  if (incoming_msg_CAN_flag){
+		  incoming_msg_CAN_flag = 0;
+		  //Gestion des donnees recues
+		  if((incoming_msg_CAN.ID & 0x00110000) == (CAN_MASTER_ID << 16)){
+			  //Gestion des reponses a nos requetes de donnees
+			  switch(incoming_msg_CAN.data[0]){
+			  	  case 0x0E://Bague essuie glace arriere sur le premier cran
+			  	  case 0x0D:
+			  	  case 0x0B:
+			  		  //Activer le clignotement
+			  		  activate = 1;
+			  		  break;
+			  	  case 0x1E://Bague essuie glace arriere sur le 0
+			  	  case 0x1D:
+			  	  case 0x1B:
+			  		  //Desactiver le clignotement
+			  		  activate = 0;
+			  		  break;
+			  }
+		  } else {
+			  uint32_t msg_id = 0;
+			  uint8_t data[1]={CAN_LIGHT_OFF};
+			  //Gestion des requetes envoyees sur le CAN
+			  switch(incoming_msg_CAN.data[0]){
+			  	  case 0x88://Bouton SET+ du commodo
+			  		  //Allumer le clignotant arriere gauche
+			  		  msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
+			  		  data[0] = CAN_LIGHT_LEFT_REAR_TURN_SIGNAL_ON;
+			  		  CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
+			  		  break;
+			  	  case 0x5D://Bouton SET- du commodo
+			  	  case 0x5E:
+			  		  //Eteindre le clignotant arriere gauche
+			  		  msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
+			  		  data[0] = CAN_LIGHT_OFF;
+			  		  CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
+			  		  break;
+			  }
+		  }
+	  }
+	  osDelay(1);
+  }
+  /* USER CODE END StartTaskHandleCAN */
 }
 
  /**

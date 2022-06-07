@@ -184,46 +184,7 @@ void CAN1_RX0_IRQHandler(void) {
 	// say that the tram has been red
 	CAN1->RF0R |= 0b1UL << CAN_RF0R_RFOM0_Pos;
 
-
 	/** Your code there**/
-	extern int activate;
-	//Gestion des donnees recues
-	if((incoming_msg_CAN.ID & 0x00110000) == (CAN_MASTER_ID << 16)){
-		//Gestion des reponses a nos requetes de donnees
-		switch(incoming_msg_CAN.data[0]){
-		case 0x0E://Bague essuie glace arriere sur le premier cran
-		case 0x0D:
-		case 0x0B:
-			//Activer le clignotement
-			activate = 1;
-			break;
-		case 0x1E://Bague essuie glace arriere sur le 0
-		case 0x1D:
-		case 0x1B:
-			//Desactiver le clignotement
-			activate = 0;
-			break;
-		}
-	} else {
-		uint32_t msg_id = 0;
-		uint8_t data[1]={CAN_LIGHT_OFF};
-		//Gestion des requetes envoyees sur le CAN
-		switch(incoming_msg_CAN.data[0]){
-			case 0x88://Bouton SET+ du commodo
-				//Allumer le clignotant arriere gauche
-				msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
-				data[0] = CAN_LIGHT_LEFT_REAR_TURN_SIGNAL_ON;
-				CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
-				break;
-			case 0x5D://Bouton SET- du commodo
-			case 0x5E:
-				//Eteindre le clignotant arriere gauche
-				msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
-				data[0] = CAN_LIGHT_OFF;
-				CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
-				break;
-		}
-	}
 }
 
 /*

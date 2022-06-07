@@ -248,18 +248,19 @@ void handle_awnser() {
 	**/
 }
 
-volatile LIN_MSG receved_msg;
-volatile int receved_msg_flag;
+volatile LIN_MSG received_msg_LIN;
+volatile int received_msg_LIN_flag;
 void handle_data(uint16_t ID) {
-	receved_msg_flag = 1;
-	receved_msg.PIDField = ID;
-	receved_msg.size = 8;	//arbitraire
-	LIN_read_message_content(&receved_msg);
+	received_msg_LIN_flag = 1;
+	received_msg_LIN.PIDField = ID;
+	received_msg_LIN.size = 8;	//arbitraire
+	LIN_read_message_content(&received_msg_LIN);
 
 	/**
-	 * receved_msg must be threated there
+	 * received_msg_LIN must be threated there
 	**/
 }
+
 
 void handle_request(uint16_t ID) {
 	uint8_t size = 8;  //arbitraire
