@@ -103,12 +103,21 @@ void LIN_config(void){
 
 /*--- Transmit LIN Message ---*/
 void LIN_send_message(LIN_MSG *msg) {
+	// send 10 bits in low position to announce the beginning of a trame
 	sync_break();
+
+	// send 0b01010101 to sync devices
 	UART_PutChar(SYNC_FRAME);
+
+	// send PID
 	UART_PutChar(msg->PIDField);
+
+	// send datas
 	for (int i = 0; i < msg->size; i++) {
 		UART_PutChar(msg->data[i]);
 	}
+
+	// send checksum
 	UART_PutChar(checksum(msg->size, msg->data));
 }
 
@@ -146,8 +155,12 @@ uint8_t checksum(uint8_t length, volatile uint8_t *data) {
 /*--- Transmit char ---*/
 void UART_PutChar(uint8_t data) {
 	myUSART->DR = data;
-	while(!(myUSART->SR & USART_SR_TXE));		// donnee transferee au registre de decalage
-	while(!(myUSART->SR & USART_SR_TC));		// fin de transmission
+
+	// donnee transferee au registre de decalage
+	while(!(myUSART->SR & USART_SR_TXE));
+
+	// fin de transmission
+	while(!(myUSART->SR & USART_SR_TC));
 }
 
 /*--- Read char ---*/
