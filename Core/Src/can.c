@@ -107,7 +107,19 @@ int CAN_set_filter(int index, int scale_mode, int filter_mode, int FIFO_ID, uint
 	return 1;
 }
 
-int CAN_send_msg(CAN_MSG msg) {
+int CAN_send_msg(uint8_t can_mode, uint32_t msg_id, uint8_t msg_rtr, uint8_t msg_dlc, uint8_t msg_data[]) {
+	//Creation du message
+	CAN_MSG msg;
+	msg.mode = can_mode;
+	msg.ID = msg_id;
+	msg.RTR = msg_rtr;
+	msg.DLC = msg_dlc;
+
+	for (int i = 0; i<msg_dlc; i++) {
+		msg.data[i] = msg_data[i];
+	}
+
+	//Envoie du message
 	if (CAN1->TSR & CAN_TSR_TME0_Msk) {
 		if (msg.mode == CAN_MODE_STANDARD) {
 			CAN1->sTxMailBox[0].TIR = (msg.ID << CAN_TI0R_STID_Pos) | (msg.RTR << CAN_TI0R_RTR_Pos);
@@ -154,35 +166,46 @@ void CAN1_RX0_IRQHandler(void) {
 	}
 	CAN1->RF0R |= 0b1UL << CAN_RF0R_RFOM0_Pos;
 
-	if((incoming_msg.ID & 0x00110000) == 0x010000){
+	//Gestion des donnees recues
+	if((incoming_msg.ID & 0x00110000) == (CAN_MASTER_ID << 16)){
 		//Gestion des reponses a nos requetes de donnees
 		switch(incoming_msg.data[0]){
-		case 0x0E:
+		case 0x0E://Bague essuie glace arriere sur le premier cran
 		case 0x0D:
+		case 0x0B:
 			//Activer le clignotement
 			activate = 1;
 			break;
-		case 0x1E:
+		case 0x1E://Bague essuie glace arriere sur le 0
 		case 0x1D:
+		case 0x01:
 			//Desactiver le clignotement
 			activate = 0;
 			break;
 		}
 	}else{
+		uint32_t msg_id = 0;
+		uint8_t data[1]={CAN_LIGHT_OFF};
 		//Gestion des requetes envoyees sur le CAN
 		switch(incoming_msg.data[0]){
-			case 0x88:
-				allumerClignotant(0x10530112, 0x04);
+			case 0x88://Bouton SET+ du commodo
+				//Allumer le clignotant arriere gauche
+				msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
+				data[0] = CAN_LIGHT_LEFT_REAR_TURN_SIGNAL_ON;
+				CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
 				break;
-			case 0x5D:
+			case 0x5D://Bouton SET- du commodo
 			case 0x5E:
-				eteindreClignotant(0x10530112);
+				//Eteindre le clignotant arriere gauche
+				msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
+				data[0] = CAN_LIGHT_OFF;
+				CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
 				break;
 		}
 	}
 }
 
-
+/*
 void allumerClignotant(uint32_t id, uint8_t value){
 	CAN_MSG msg;
 	msg.mode = CAN_MODE_EXTENDED;
@@ -194,11 +217,11 @@ void allumerClignotant(uint32_t id, uint8_t value){
 	for (int i = 0; i<1; i++) {
 		msg.data[i] = data[i];
 	}
-	CAN_send_msg(msg);
+	//CAN_send_msg(msg);
 }
+*/
 
-
-
+/*
 void eteindreClignotant(uint32_t id){
 	CAN_MSG msg;
 	msg.mode = CAN_MODE_EXTENDED;
@@ -209,5 +232,6 @@ void eteindreClignotant(uint32_t id){
 	uint8_t data2[1] = {0x00};
 	msg.data[0] = data2[0];
 
-	CAN_send_msg(msg);
+	//CAN_send_msg(msg);
 }
+*/
