@@ -47,7 +47,11 @@ osThreadId taskTestCommandHandle;
 osThreadId taskClignoterHandle;
 osThreadId taskHandleLINHandle;
 osThreadId taskHandleCANHandle;
-osMessageQId queueMsgCANHandle;
+osMessageQId queue_LIN_request_modeHandle;
+osMessageQId queue_LIN_request_reponseHandle;
+osMessageQId queue_LIN_waiting_for_responseHandle;
+osMessageQId queue_LIN_message_recievedHandle;
+osMessageQId queue_CAN_msgHandle;
 /* USER CODE BEGIN PV */
 int activate = 0;
 /* USER CODE END PV */
@@ -116,9 +120,25 @@ int main(void)
   /* USER CODE END RTOS_TIMERS */
 
   /* Create the queue(s) */
-  /* definition and creation of queueMsgCAN */
-  osMessageQDef(queueMsgCAN, 8, CAN_MSG);
-  queueMsgCANHandle = osMessageCreate(osMessageQ(queueMsgCAN), NULL);
+  /* definition and creation of queue_LIN_request_mode */
+  osMessageQDef(queue_LIN_request_mode, 1, uint8_t);
+  queue_LIN_request_modeHandle = osMessageCreate(osMessageQ(queue_LIN_request_mode), NULL);
+
+  /* definition and creation of queue_LIN_request_reponse */
+  osMessageQDef(queue_LIN_request_reponse, 1, LIN_MSG);
+  queue_LIN_request_reponseHandle = osMessageCreate(osMessageQ(queue_LIN_request_reponse), NULL);
+
+  /* definition and creation of queue_LIN_waiting_for_response */
+  osMessageQDef(queue_LIN_waiting_for_response, 1, LIN_MSG);
+  queue_LIN_waiting_for_responseHandle = osMessageCreate(osMessageQ(queue_LIN_waiting_for_response), NULL);
+
+  /* definition and creation of queue_LIN_message_recieved */
+  osMessageQDef(queue_LIN_message_recieved, 1, LIN_MSG);
+  queue_LIN_message_recievedHandle = osMessageCreate(osMessageQ(queue_LIN_message_recieved), NULL);
+
+  /* definition and creation of queue_CAN_msg */
+  osMessageQDef(queue_CAN_msg, 8, CAN_MSG);
+  queue_CAN_msgHandle = osMessageCreate(osMessageQ(queue_CAN_msg), NULL);
 
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
