@@ -47,6 +47,7 @@ osThreadId taskTestCommandHandle;
 osThreadId taskClignoterHandle;
 osThreadId taskHandleLINHandle;
 osThreadId taskHandleCANHandle;
+osMessageQId queueMsgCANHandle;
 /* USER CODE BEGIN PV */
 int activate = 0;
 /* USER CODE END PV */
@@ -114,25 +115,30 @@ int main(void)
   /* start timers, add new ones, ... */
   /* USER CODE END RTOS_TIMERS */
 
+  /* Create the queue(s) */
+  /* definition and creation of queueMsgCAN */
+  osMessageQDef(queueMsgCAN, 8, CAN_MSG);
+  queueMsgCANHandle = osMessageCreate(osMessageQ(queueMsgCAN), NULL);
+
   /* USER CODE BEGIN RTOS_QUEUES */
   /* add queues, ... */
   /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
   /* definition and creation of taskTestCommand */
-  osThreadDef(taskTestCommand, freeRTOSTestCommand, osPriorityBelowNormal, 0, 128);
+  osThreadDef(taskTestCommand, freeRTOSTestCommand, osPriorityNormal, 0, 128);
   taskTestCommandHandle = osThreadCreate(osThread(taskTestCommand), NULL);
 
   /* definition and creation of taskClignoter */
-  osThreadDef(taskClignoter, freeRTOSClignoter, osPriorityNormal, 0, 128);
+  osThreadDef(taskClignoter, freeRTOSClignoter, osPriorityAboveNormal, 0, 128);
   taskClignoterHandle = osThreadCreate(osThread(taskClignoter), NULL);
 
   /* definition and creation of taskHandleLIN */
-  osThreadDef(taskHandleLIN, StartTaskHandleLIN, osPriorityIdle, 0, 128);
+  osThreadDef(taskHandleLIN, StartTaskHandleLIN, osPriorityLow, 0, 128);
   taskHandleLINHandle = osThreadCreate(osThread(taskHandleLIN), NULL);
 
   /* definition and creation of taskHandleCAN */
-  osThreadDef(taskHandleCAN, StartTaskHandleCAN, osPriorityLow, 0, 128);
+  osThreadDef(taskHandleCAN, StartTaskHandleCAN, osPriorityBelowNormal, 0, 128);
   taskHandleCANHandle = osThreadCreate(osThread(taskHandleCAN), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -312,18 +318,35 @@ void StartTaskHandleLIN(void const * argument)
   {
 	if(received_msg_LIN_flag){
 		received_msg_LIN_flag = 0;
-		if((received_msg_LIN.PIDField & 0b1110000) == 0b0010000){
-			if(received_msg_LIN.data[0]){
-				HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, 1);
-			}else{
-				HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, 0);
+		if((received_msg_LIN.PIDField & 0b10000000) == 0b10000000){//Trame de donnees
+			switch(received_msg_LIN.PIDField & 0b1110000){
+				case 0b0010000:
+					if(received_msg_LIN.data[0]){
+						HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, 1);
+					}else{
+						HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, 0);
+					}
+					break;
+			}
+		}else{//Trame de requete
+			switch(received_msg_LIN.PIDField & 0b1110000){
+				case 0b0000000:
+					//TODO Renvoyer l'horloge
+					break;
+				case 0b0010000:
+					//TODO renvoyer l'état de la LED
+					LIN_MSG msgLinEtatLed;
+					msgLinEtatLed.PIDField;//Prévoir un id pour quand on répond/envoie état led ??
+					msgLinEtatLed.data[0] = HAL_GPIO_ReadPin(LED_Vert_GPIO_Port, LED_Vert_Pin);
+					msgLinEtatLed.size = 1;
+					LIN_send_message(msgLinEtatLed);
 			}
 		}
 	}
 	//Cas du request
 	//HAL_GPIO_ReadPin(GPIOx, GPIO_Pin)
 
-    osDelay(1);
+    osDelay(10);
   }
   /* USER CODE END StartTaskHandleLIN */
 }
@@ -340,9 +363,18 @@ void StartTaskHandleCAN(void const * argument)
   /* USER CODE BEGIN StartTaskHandleCAN */
   extern volatile CAN_MSG incoming_msg_CAN;
   extern volatile int incoming_msg_CAN_flag;
+  osEvent receivedMsg;
   /* Infinite loop */
   for(;;)
   {
+
+	  receivedMsg = osMessageGet(queueMsgCANHandle, 100);
+
+	  //Acces au msg : receivedMsg.value.v
+	  //CAN_MSG msg = (CAN_MSG)receivedMsg.value.v;
+	  //USART_send_message(msg);
+
+
 	  if (incoming_msg_CAN_flag){
 		  incoming_msg_CAN_flag = 0;
 		  //Gestion des donnees recues
@@ -383,7 +415,7 @@ void StartTaskHandleCAN(void const * argument)
 			  }
 		  }
 	  }
-	  osDelay(1);
+	  osDelay(10);
   }
   /* USER CODE END StartTaskHandleCAN */
 }

@@ -57,7 +57,7 @@ void CAN_config(){
 	//Activate Interrupt on NVIC
 	uint32_t prioritygroup = 0x00U;
 	prioritygroup = NVIC_GetPriorityGrouping();
-	NVIC_SetPriority(CAN1_RX0_IRQn, NVIC_EncodePriority(prioritygroup, 0, 1));
+	NVIC_SetPriority(CAN1_RX0_IRQn, NVIC_EncodePriority(prioritygroup, 5, 1));
 
 	/* Enable interrupt */
 	NVIC_EnableIRQ(CAN1_RX0_IRQn);
@@ -159,6 +159,7 @@ int CAN_send_msg(uint8_t can_mode, uint32_t msg_id, uint8_t msg_rtr, uint8_t msg
 
 volatile CAN_MSG incoming_msg_CAN;
 volatile int incoming_msg_CAN_flag;
+extern queueMsgCANHandle;
 void CAN1_RX0_IRQHandler(void) {
 	//set a flag to say that a new message is unread
 	incoming_msg_CAN_flag = 1;
@@ -183,6 +184,8 @@ void CAN1_RX0_IRQHandler(void) {
 
 	// say that the tram has been red
 	CAN1->RF0R |= 0b1UL << CAN_RF0R_RFOM0_Pos;
+
+	osMessagePut(queueMsgCANHandle, incoming_msg_CAN, 100);
 
 	/** Your code there**/
 }
