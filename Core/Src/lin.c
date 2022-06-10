@@ -1,8 +1,5 @@
 #include "lin.h"
 
-volatile uint8_t request_mode_LIN;
-volatile LIN_MSG* request_msg_LIN;
-
 GPIO_TypeDef * myGPIO = GPIOB;
 USART_TypeDef * myUSART = USART3;
 
@@ -140,8 +137,8 @@ void LIN_send_request(LIN_MSG *req) {
 	// send PID
 	UART_PutChar(req->PIDField);
 
-	//set request MODE (the device wait for a response)
-	request_mode_LIN = 1;
+	//TODO set request MODE (the device wait for a response)
+	//set queue request mode to 1
 
 	//set where the response must be stored
 	request_msg_LIN = req;
@@ -198,7 +195,7 @@ uint8_t UART_GetChar(void) {
 	}
 }
 
-void LIN_read_message_content(volatile LIN_MSG* msg) {
+void LIN_read_message_content(LIN_MSG* msg) {
 	for (int i = 0; i < msg->size; i++) {
 		msg->data[i] = UART_GetChar();
 	}
@@ -209,71 +206,37 @@ void LIN_read_message_content(volatile LIN_MSG* msg) {
 	}
 }
 
+void LIN_write_message_content(LIN_MSG* msg) {
+	uint8_t actual_check_sum = checksum(msg->size, msg->data);
+	for (int i = 0; i < msg->size; i++) {
+		UART_PutChar(msg->data[i]);
+	}
+	UART_PutChar(actual_check_sum);
+}
+
 void USART3_IRQHandler(void) {
-	// no frame
-	// awnser: recieve the result of a previous request
-	if (request_mode_LIN) {
-		request_mode_LIN = 0;
-		handle_awnser();
+	if (/** TODO: **/) {// read queue request mode
+		//TODO:empty queue request mode
+		LIN_MSG msg;
+		LIN_read_message_content(&msg);
+		//TODO:write in queue request response
 		return;
 	}
 
 	if (myUSART->SR & USART_SR_LBD_Msk) {
-		myUSART->SR &= ~(USART_SR_LBD_Msk);
-
-		// with frames
+		myUSART->SR &= ~(USART_SR_LBD_Msk);//reset break flag
 		uint8_t break_frame = UART_GetChar(); //void break frame
 		uint8_t sync_frame = UART_GetChar(); //void sync frame
-		uint8_t PID = UART_GetChar(); //retrieve PID frame
 
-		// data: recieve only data (UID starting by 1 // arbitrary)
-		if (PID & 0x80) {
-			handle_data((uint16_t) PID & ~(0x80));
-			return;
+		LIN_MSG msg;
+		msg.PIDField = UART_GetChar(); //retrieve PID frame
+		msg.size = msg.PIDField & LIN_ID_Msk >> LIN_ID_Pos;
+		if (!(msg.PIDField & LIN_MODE_Msk)) {// response
+			//TODO:queue waiting for response
+		} else {
+			//TODO:queue message recieved
+			LIN_read_message_content(&msg);
 		}
 
-		// request: recieve a request that have to be awnsered (UID starting by 0 // arbitrary)
-		if (!(PID & 0x80)) {
-			handle_request(PID & ~(0x80));
-			return;
-		}
 	}
-}
-
-void handle_awnser() {
-	LIN_read_message_content(request_msg_LIN);
-
-	/**
-	 * request_msg_LIN must be threated there
-	**/
-}
-
-volatile LIN_MSG received_msg_LIN;
-volatile int received_msg_LIN_flag;
-void handle_data(uint16_t ID) {
-	received_msg_LIN_flag = 1;
-	received_msg_LIN.PIDField = ID;
-	received_msg_LIN.size = 8;	//arbitraire
-	LIN_read_message_content(&received_msg_LIN);
-
-	/**
-	 * received_msg_LIN must be threated there
-	**/
-}
-
-
-void handle_request(uint16_t ID) {
-	uint8_t size = 8;  //arbitraire
-
-	/** data to sent must be created there ----------------------------**/
-	/** USER CODE BEGIN **/
-	uint8_t data[16] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p'};
-
-	/** USER CODE END **/
-
-	uint8_t actual_check_sum = checksum(size, data);
-	for (int i = 0; i < size; i++) {
-		UART_PutChar(data[i]);
-	}
-	UART_PutChar(actual_check_sum);
 }

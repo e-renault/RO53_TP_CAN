@@ -311,40 +311,44 @@ void freeRTOSClignoter(void const * argument)
 void StartTaskHandleLIN(void const * argument)
 {
   /* USER CODE BEGIN StartTaskHandleLIN */
-  extern volatile int received_msg_LIN_flag;
-  extern volatile LIN_MSG received_msg_LIN;
+
   /* Infinite loop */
-  for(;;)
-  {
-	if(received_msg_LIN_flag){
-		received_msg_LIN_flag = 0;
-		if((received_msg_LIN.PIDField & 0b10000000) == 0b10000000){//Trame de donnees
-			switch(received_msg_LIN.PIDField & 0b1110000){
-				case 0b0010000:
-					if(received_msg_LIN.data[0]){
-						HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, 1);
-					}else{
-						HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, 0);
-					}
-					break;
-			}
-		}else{//Trame de requete
-			switch(received_msg_LIN.PIDField & 0b1110000){
-				case 0b0000000:
-					//TODO Renvoyer l'horloge
-					break;
-				case 0b0010000:
-					//TODO renvoyer l'état de la LED
-					LIN_MSG msgLinEtatLed;
-					msgLinEtatLed.PIDField;//Prévoir un id pour quand on répond/envoie état led ??
-					msgLinEtatLed.data[0] = HAL_GPIO_ReadPin(LED_Vert_GPIO_Port, LED_Vert_Pin);
-					msgLinEtatLed.size = 1;
-					LIN_send_message(msgLinEtatLed);
-			}
+  for(;;) {
+
+	if (/** read queue message recieved **/) {
+		//queue message recieved
+		switch(received_msg_LIN.PIDField & LIN_ID_Msk >> LIN_ID_Pos){
+			case 0b001:
+				if(received_msg_LIN.data[0]){
+					HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, 1);
+				}else{
+					HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, 0);
+				}
+				break;
 		}
 	}
-	//Cas du request
-	//HAL_GPIO_ReadPin(GPIOx, GPIO_Pin)
+
+	if (/** read queue waiting for response **/) {
+		//queue waiting for response
+		switch(received_msg_LIN.PIDField & LIN_ID_Msk >> LIN_ID_Pos){
+			case 0b000:
+				//TODO Renvoyer l'horloge
+				break;
+			case 0b001:
+				//TODO renvoyer l'état de la LED
+				LIN_MSG msgLinEtatLed;
+				msgLinEtatLed.PIDField;//Prévoir un id pour quand on répond/envoie état led ??
+				msgLinEtatLed.data[0] = HAL_GPIO_ReadPin(LED_Vert_GPIO_Port, LED_Vert_Pin);
+				msgLinEtatLed.size = 1;
+				LIN_write_message_content(msgLinEtatLed);
+				break;
+		}
+	}
+
+	if (/** read queue request response **/) {
+		//interprete response
+		//queue request response
+	}
 
     osDelay(10);
   }
