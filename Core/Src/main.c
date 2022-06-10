@@ -25,6 +25,7 @@
 #include "can.h"
 #include "lin.h"
 #include "myUART.h"
+#include "myTime.h"
 #include "stm32f4xx_hal_gpio.h"
 /* USER CODE END Includes */
 
@@ -104,6 +105,7 @@ int main(void)
   /* USER CODE BEGIN 2 */
   CAN_config();
   LIN_config();
+  clock_Init();
   USART_config();
   /* USER CODE END 2 */
 
@@ -335,8 +337,11 @@ void StartTaskHandleLIN(void const * argument)
   /* Infinite loop */
   for(;;) {
 
-	if (/** read queue message recieved **/) {
-		//queue message recieved
+	if (uxQueueMessagesWaiting(queue_LIN_message_recievedHandle)) {/** read queue message recieved **/
+
+		LIN_MSG received_msg_LIN;
+		xQueueReceive(queue_LIN_message_recievedHandle, &received_msg_LIN, 100);//queue message recieved
+
 		switch(received_msg_LIN.PIDField & LIN_ID_Msk >> LIN_ID_Pos){
 			case 0b001:
 				if(received_msg_LIN.data[0]){
@@ -348,26 +353,48 @@ void StartTaskHandleLIN(void const * argument)
 		}
 	}
 
-	if (/** read queue waiting for response **/) {
-		//queue waiting for response
+	if (uxQueueMessagesWaiting(queue_LIN_waiting_for_responseHandle)) {/** read queue waiting for response **/
+
+		LIN_MSG received_msg_LIN;
+		xQueueReceive(queue_LIN_waiting_for_responseHandle, &received_msg_LIN, 100);//queue waiting for response
+
+		LIN_MSG response;int i = 0;
+
 		switch(received_msg_LIN.PIDField & LIN_ID_Msk >> LIN_ID_Pos){
 			case 0b000:
 				//TODO Renvoyer l'horloge
+				Time t;
+				getCurrentTime(Time t);
+
+				response.data[i++] = t.hou.MSD;
+				response.data[i++] = t.hou.LSD;
+				response.data[i++] = t.min.MSD;
+				response.data[i++] = t.min.LSD;
+				response.data[i++] = t.sec.MSD;
+				response.data[i++] = t.sec.LSD;
 				break;
 			case 0b001:
-				//TODO renvoyer l'état de la LED
-				LIN_MSG msgLinEtatLed;
-				msgLinEtatLed.PIDField;//Prévoir un id pour quand on répond/envoie état led ??
-				msgLinEtatLed.data[0] = HAL_GPIO_ReadPin(LED_Vert_GPIO_Port, LED_Vert_Pin);
-				msgLinEtatLed.size = 1;
-				LIN_write_message_content(msgLinEtatLed);
+				//renvoyer l'état de la LED
+				response.data[i++] = HAL_GPIO_ReadPin(LED_Vert_GPIO_Port, LED_Vert_Pin);
 				break;
 		}
+
+		LIN_write_message_content(&response);
 	}
 
-	if (/** read queue request response **/) {
-		//interprete response
-		//queue request response
+	if (uxQueueMessagesWaiting(queue_LIN_request_reponseHandle)) {/** read queue request response **/
+
+		LIN_MSG return_msg_LIN;
+		xQueueReceive(queue_LIN_request_reponseHandle, &return_msg_LIN, 100);//queue waiting for response
+
+		switch(return_msg_LIN.PIDField & LIN_ID_Msk >> LIN_ID_Pos){
+			case 0b000:
+				//TODO Afficher l'horloge
+				break;
+			case 0b001:
+				//TODO Afficher l'état de la LED
+				break;
+		}
 	}
 
     osDelay(10);
@@ -385,61 +412,52 @@ void StartTaskHandleLIN(void const * argument)
 void StartTaskHandleCAN(void const * argument)
 {
   /* USER CODE BEGIN StartTaskHandleCAN */
-  extern volatile CAN_MSG incoming_msg_CAN;
-  extern volatile int incoming_msg_CAN_flag;
-  osEvent receivedMsg;
   /* Infinite loop */
-  for(;;)
-  {
+  for(;;) {
+	if (uxQueueMessagesWaiting(queue_CAN_msgHandle)) {/** read queue message recieved **/
 
-	  receivedMsg = osMessageGet(queueMsgCANHandle, 100);
+		CAN_MSG received_msg_CAN;
+		xQueueReceive(queue_CAN_msgHandle, &received_msg_CAN, 100);//queue message recieved
 
-	  //Acces au msg : receivedMsg.value.v
-	  //CAN_MSG msg = (CAN_MSG)receivedMsg.value.v;
-	  //USART_send_message(msg);
-
-
-	  if (incoming_msg_CAN_flag){
-		  incoming_msg_CAN_flag = 0;
-		  //Gestion des donnees recues
-		  if((incoming_msg_CAN.ID & 0x00110000) == (CAN_MASTER_ID << 16)){
-			  //Gestion des reponses a nos requetes de donnees
-			  switch(incoming_msg_CAN.data[0]){
-			  	  case 0x0E://Bague essuie glace arriere sur le premier cran
-			  	  case 0x0D:
-			  	  case 0x0B:
-			  		  //Activer le clignotement
-			  		  activate = 1;
-			  		  break;
-			  	  case 0x1E://Bague essuie glace arriere sur le 0
-			  	  case 0x1D:
-			  	  case 0x1B:
-			  		  //Desactiver le clignotement
-			  		  activate = 0;
-			  		  break;
-			  }
-		  } else {
-			  uint32_t msg_id = 0;
-			  uint8_t data[1]={CAN_LIGHT_OFF};
-			  //Gestion des requetes envoyees sur le CAN
-			  switch(incoming_msg_CAN.data[0]){
-			  	  case 0x88://Bouton SET+ du commodo
-			  		  //Allumer le clignotant arriere gauche
-			  		  msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
-			  		  data[0] = CAN_LIGHT_LEFT_REAR_TURN_SIGNAL_ON;
-			  		  CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
-			  		  break;
-			  	  case 0x5D://Bouton SET- du commodo
-			  	  case 0x5E:
-			  		  //Eteindre le clignotant arriere gauche
-			  		  msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
-			  		  data[0] = CAN_LIGHT_OFF;
-			  		  CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
-			  		  break;
-			  }
-		  }
-	  }
-	  osDelay(10);
+		//Gestion des donnees recues
+		if((received_msg_CAN.ID & 0x00110000) == (CAN_MASTER_ID << 16)){
+			//Gestion des reponses a nos requetes de donnees
+			switch(received_msg_CAN.data[0]){
+				case 0x0E://Bague essuie glace arriere sur le premier cran
+				case 0x0D:
+				case 0x0B:
+					//Activer le clignotement
+					activate = 1;
+					break;
+				case 0x1E://Bague essuie glace arriere sur le 0
+				case 0x1D:
+				case 0x1B:
+					//Desactiver le clignotement
+					activate = 0;
+					break;
+			}
+		} else {
+			uint32_t msg_id = 0;
+			uint8_t data[1]={CAN_LIGHT_OFF};
+			//Gestion des requetes envoyees sur le CAN
+			switch(received_msg_CAN.data[0]){
+				case 0x88://Bouton SET+ du commodo
+					//Allumer le clignotant arriere gauche
+					msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
+					data[0] = CAN_LIGHT_LEFT_REAR_TURN_SIGNAL_ON;
+					CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
+					break;
+				case 0x5D://Bouton SET- du commodo
+				case 0x5E:
+					//Eteindre le clignotant arriere gauche
+					msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
+					data[0] = CAN_LIGHT_OFF;
+					CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
+					break;
+			}
+		}
+	}
+	osDelay(10);
   }
   /* USER CODE END StartTaskHandleCAN */
 }

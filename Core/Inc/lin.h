@@ -33,7 +33,7 @@ void UART_PutChar(uint8_t data);
 
 uint8_t UART_GetChar(void);
 
-void LIN_read_message_content(volatile LIN_MSG* msg);
+void LIN_read_message_content(LIN_MSG* msg);
 
 void LIN_write_message_content(LIN_MSG* msg);
 

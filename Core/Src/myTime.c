@@ -31,18 +31,6 @@ void getCurrentTime(Time *time) {
 	}
 }
 
-void setCurrentTime(Time *time) {
-	RTC_TimeTypeDef tm;
-	tm.Hours = time->hou.BIN;
-	tm.Minutes = time->min.BIN;
-	tm.Seconds = time->sec.BIN;
-	tm.TimeFormat = (time->format == AM) ? RTC_HOURFORMAT12_AM : RTC_HOURFORMAT12_PM;
-	tm.SubSeconds = 0;
-	tm.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-	tm.StoreOperation = RTC_STOREOPERATION_RESET;
-
-	HAL_RTC_SetTime(&hrtc, &tm, RTC_FORMAT_BIN);
-}
 
 void getCurrentDate(Date *date) {
 	uint32_t RTC_DR = _RTC->DR;
@@ -70,16 +58,6 @@ void getCurrentDate(Date *date) {
 	} else {
 		date->dayName = dayf - 1;
 	}
-}
-
-void setCurrentDate(Date *date) {
-	RTC_DateTypeDef dm;
-	dm.WeekDay = date->dayName + 1;
-	dm.Month = date->mon.BIN;
-	dm.Date = date->day.BIN;
-	dm.Year = date->yea.BIN;
-
-	HAL_RTC_SetDate(&hrtc, &dm, RTC_FORMAT_BIN);
 }
 
 uint8_t BCDtoBinary(uint8_t value) {

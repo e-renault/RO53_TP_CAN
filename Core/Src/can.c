@@ -1,5 +1,6 @@
 #include "can.h"
 #include "stm32f4xx.h"
+#include "cmsis_os.h"
 
 CAN_TypeDef *CAN = CAN1;
 
@@ -157,12 +158,9 @@ int CAN_send_msg(uint8_t can_mode, uint32_t msg_id, uint8_t msg_rtr, uint8_t msg
 	}
 }
 
-volatile CAN_MSG incoming_msg_CAN;
-volatile int incoming_msg_CAN_flag;
-extern queueMsgCANHandle;
 void CAN1_RX0_IRQHandler(void) {
-	//set a flag to say that a new message is unread
-	incoming_msg_CAN_flag = 1;
+	extern osMessageQId queue_CAN_msgHandle;
+	CAN_MSG incoming_msg_CAN;
 
 	//retrieve CAN mode (std or extanded)
 	incoming_msg_CAN.mode = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_IDE_Msk) >> CAN_TI0R_IDE_Pos;
@@ -185,7 +183,7 @@ void CAN1_RX0_IRQHandler(void) {
 	// say that the tram has been red
 	CAN1->RF0R |= 0b1UL << CAN_RF0R_RFOM0_Pos;
 
-	osMessagePut(queueMsgCANHandle, incoming_msg_CAN, 100);
+	osMessagePut(queue_CAN_msgHandle, &incoming_msg_CAN, 100);
 
 	/** Your code there**/
 }

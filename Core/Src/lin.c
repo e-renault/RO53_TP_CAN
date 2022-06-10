@@ -1,4 +1,5 @@
 #include "lin.h"
+#include "cmsis_os.h"
 
 GPIO_TypeDef * myGPIO = GPIOB;
 USART_TypeDef * myUSART = USART3;
@@ -125,6 +126,8 @@ void LIN_send_message(LIN_MSG *msg) {
 
 /*--- Transmit LIN Request ---*/
 void LIN_send_request(LIN_MSG *req) {
+	extern osMessageQId queue_LIN_request_modeHandle;
+
 	//disable IRQ to ensure that the transmission goes right
 	NVIC_DisableIRQ(USART3_IRQn);
 
@@ -138,10 +141,8 @@ void LIN_send_request(LIN_MSG *req) {
 	UART_PutChar(req->PIDField);
 
 	//TODO set request MODE (the device wait for a response)
-	//set queue request mode to 1
-
-	//set where the response must be stored
-	request_msg_LIN = req;
+	int dump = 1;
+	xQueueSendFromISR(queue_LIN_request_modeHandle, &dump, 0);
 
 	//reenable IRQ
 	NVIC_EnableIRQ(USART3_IRQn);
@@ -215,11 +216,22 @@ void LIN_write_message_content(LIN_MSG* msg) {
 }
 
 void USART3_IRQHandler(void) {
-	if (/** TODO: **/) {// read queue request mode
+	extern osMessageQId queue_LIN_request_modeHandle;
+	extern osMessageQId queue_LIN_waiting_for_responseHandle;
+	extern osMessageQId queue_LIN_message_recievedHandle;
+	extern osMessageQId queue_LIN_request_reponseHandle;
+
+	if (uxQueueMessagesWaitingFromISR(queue_LIN_request_modeHandle)) {// read queue request mode
 		//TODO:empty queue request mode
+		int dump;
+		xQueueReceiveFromISR(queue_LIN_request_modeHandle, &dump, 100);//queue message recieved
+
 		LIN_MSG msg;
 		LIN_read_message_content(&msg);
+
 		//TODO:write in queue request response
+		xQueueSendFromISR(queue_LIN_request_reponseHandle, &msg, 0);
+
 		return;
 	}
 
@@ -231,11 +243,14 @@ void USART3_IRQHandler(void) {
 		LIN_MSG msg;
 		msg.PIDField = UART_GetChar(); //retrieve PID frame
 		msg.size = msg.PIDField & LIN_ID_Msk >> LIN_ID_Pos;
+
 		if (!(msg.PIDField & LIN_MODE_Msk)) {// response
 			//TODO:queue waiting for response
+			xQueueSendFromISR(queue_LIN_waiting_for_responseHandle, &msg, 0);
 		} else {
 			//TODO:queue message recieved
 			LIN_read_message_content(&msg);
+			xQueueSendFromISR(queue_LIN_message_recievedHandle, &msg, 0);
 		}
 
 	}

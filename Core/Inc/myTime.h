@@ -40,11 +40,7 @@ void clock_Init(void);
 
 void getCurrentTime(Time *time);
 
-void setCurrentTime(Time *time);
-
 void getCurrentDate(Date *data);
-
-void setCurrentDate(Date *data);
 
 uint8_t BCDtoBinary(uint8_t);
 
@@ -53,9 +49,5 @@ uint8_t BinarytoBCD(uint8_t value);
 Time CreateTime(uint8_t hours, uint8_t minutes, uint8_t seconds);
 
 Date CreateDate(uint8_t day, uint8_t month, uint16_t year);
-
-
-RTC_HandleTypeDef hrtc;
-static void MX_RTC_Init(void);
 
 #endif
