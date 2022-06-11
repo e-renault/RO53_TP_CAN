@@ -54,9 +54,4 @@ int CAN_send_msg(uint8_t, uint32_t, uint8_t, uint8_t, uint8_t[]);
 
 void CAN_config();
 
-/*
-void allumerClignotant(uint32_t, uint8_t);
-void eteindreClignotant(uint32_t);
-*/
-
 #endif /* __CAN_H */

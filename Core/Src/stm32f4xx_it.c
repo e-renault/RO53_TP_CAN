@@ -24,7 +24,9 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 /* USER CODE END Includes */
-
+#include "cmsis_os.h"
+#include "lin.h"
+#include "can.h"
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN TD */
 
@@ -175,6 +177,78 @@ void TIM6_DAC_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+
+
+
+
+void USART3_IRQHandler(void) {
+	extern osMessageQId queue_LIN_request_modeHandle;
+	extern osMessageQId queue_LIN_waiting_for_responseHandle;
+	extern osMessageQId queue_LIN_message_recievedHandle;
+	extern osMessageQId queue_LIN_request_reponseHandle;
+
+
+	if (uxQueueMessagesWaitingFromISR(queue_LIN_request_modeHandle)) {// read queue request mode
+		//queue request mode
+
+		int dump;xQueueReceiveFromISR(queue_LIN_request_modeHandle, &dump, 100);//reset queue message recieved
+
+		LIN_MSG msg;LIN_read_message_content(&msg);//read message
+
+		xQueueSendFromISR(queue_LIN_request_reponseHandle, &msg, 0);//write in queue request response
+		return;
+	}
+
+	if (myUSART->SR & USART_SR_LBD_Msk) {//lien break detected
+		myUSART->SR &= ~(USART_SR_LBD_Msk);//reset break flag
+		uint8_t break_frame = UART_GetChar(); //void break frame
+		uint8_t sync_frame = UART_GetChar(); //void sync frame
+
+		LIN_MSG msg;//recieved message
+		msg.ID = UART_GetChar(); //retrieve PID frame
+		msg.size = msg.ID & LIN_ID_Msk >> LIN_ID_Pos;//get size
+
+		if (!(msg.ID & LIN_MODE_Msk)) {// is request or data mode based on ID field
+			//request mode
+			xQueueSendFromISR(queue_LIN_waiting_for_responseHandle, &msg, 0);//add to queue waiting for response
+		} else {
+			//data mode
+			LIN_read_message_content(&msg);//read content
+			xQueueSendFromISR(queue_LIN_message_recievedHandle, &msg, 0);//add to queue message recieved
+		}
+		return;
+	}
+}
+
+void CAN1_RX0_IRQHandler(void) {
+	extern osMessageQId queue_CAN_msgHandle;
+	CAN_MSG incoming_msg_CAN;
+
+	//retrieve CAN mode (std or extanded)
+	incoming_msg_CAN.mode = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_IDE_Msk) >> CAN_TI0R_IDE_Pos;
+
+	//retrieve UID depending on the mode
+	if (incoming_msg_CAN.mode == CAN_MODE_STANDARD) {
+		incoming_msg_CAN.ID = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_STID_Msk) >> CAN_TI0R_STID_Pos;
+	} else {
+		incoming_msg_CAN.ID = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_EXID_Msk) >> CAN_TI0R_EXID_Pos;
+	}
+	// data or request mode
+	incoming_msg_CAN.RTR = (CAN1->sFIFOMailBox[0].RIR & CAN_TI0R_RTR_Msk) >> CAN_TI0R_RTR_Pos;
+
+	// retrieve lenght
+	incoming_msg_CAN.DLC = CAN1->sFIFOMailBox[0].RDTR & CAN_RDT0R_DLC_Msk;
+	for (int i = 0, shift = 0; i<8; i++, shift += 8) {
+		incoming_msg_CAN.data[i] = (CAN1->sFIFOMailBox[0].RDLR >> shift) & 0xFF;
+	}
+
+	// say that the tram has been red
+	CAN1->RF0R |= 0b1UL << CAN_RF0R_RFOM0_Pos;
+
+	osMessagePut(queue_CAN_msgHandle, &incoming_msg_CAN, 100);
+
+	/** Your code there**/
+}
 
 /* USER CODE END 1 */
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

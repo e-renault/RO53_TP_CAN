@@ -13,8 +13,11 @@
 #define LIN_MODE_Pos (7)
 #define LIN_MODE_Msk (0x1 << LIN_MODE_Pos)
 
+#define myGPIO (GPIOB)
+#define myUSART (USART3)
+
 typedef struct{
-	uint16_t PIDField;	//10bits
+	uint16_t ID;	//10bits
 	uint8_t data[16];	//8bits but 10 in reality
 	uint8_t size;
 }LIN_MSG;
@@ -36,7 +39,5 @@ uint8_t UART_GetChar(void);
 void LIN_read_message_content(LIN_MSG* msg);
 
 void LIN_write_message_content(LIN_MSG* msg);
-
-void USART3_IRQHandler(void);
 
 #endif /* __LIN_H */

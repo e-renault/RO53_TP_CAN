@@ -1,8 +1,6 @@
 #include "lin.h"
 #include "cmsis_os.h"
 
-GPIO_TypeDef * myGPIO = GPIOB;
-USART_TypeDef * myUSART = USART3;
 
 /*--- UART INIT ---*/
 void LIN_config(void){
@@ -110,7 +108,7 @@ void LIN_send_message(LIN_MSG *msg) {
 	UART_PutChar(SYNC_FRAME);
 
 	// send PID
-	UART_PutChar(msg->PIDField);
+	UART_PutChar(msg->ID);
 
 	// send datas
 	for (int i = 0; i < msg->size; i++) {
@@ -138,7 +136,7 @@ void LIN_send_request(LIN_MSG *req) {
 	UART_PutChar(SYNC_FRAME);
 
 	// send PID
-	UART_PutChar(req->PIDField);
+	UART_PutChar(req->ID);
 
 	//set request MODE (the device wait for a response)
 	int dump = 1;
@@ -213,45 +211,4 @@ void LIN_write_message_content(LIN_MSG* msg) {
 		UART_PutChar(msg->data[i]);
 	}
 	UART_PutChar(actual_check_sum);
-}
-
-void USART3_IRQHandler(void) {
-	extern osMessageQId queue_LIN_request_modeHandle;
-	extern osMessageQId queue_LIN_waiting_for_responseHandle;
-	extern osMessageQId queue_LIN_message_recievedHandle;
-	extern osMessageQId queue_LIN_request_reponseHandle;
-
-	if (uxQueueMessagesWaitingFromISR(queue_LIN_request_modeHandle)) {// read queue request mode
-		//queue request mode
-		int dump;
-		xQueueReceiveFromISR(queue_LIN_request_modeHandle, &dump, 100);//queue message recieved
-
-		LIN_MSG msg;
-		LIN_read_message_content(&msg);
-
-		//write in queue request response
-		xQueueSendFromISR(queue_LIN_request_reponseHandle, &msg, 0);
-
-		return;
-	}
-
-	if (myUSART->SR & USART_SR_LBD_Msk) {
-		myUSART->SR &= ~(USART_SR_LBD_Msk);//reset break flag
-		uint8_t break_frame = UART_GetChar(); //void break frame
-		uint8_t sync_frame = UART_GetChar(); //void sync frame
-
-		LIN_MSG msg;
-		msg.PIDField = UART_GetChar(); //retrieve PID frame
-		msg.size = msg.PIDField & LIN_ID_Msk >> LIN_ID_Pos;
-
-		if (!(msg.PIDField & LIN_MODE_Msk)) {// response
-			//queue waiting for response
-			xQueueSendFromISR(queue_LIN_waiting_for_responseHandle, &msg, 0);
-		} else {
-			//queue message recieved
-			LIN_read_message_content(&msg);
-			xQueueSendFromISR(queue_LIN_message_recievedHandle, &msg, 0);
-		}
-
-	}
 }

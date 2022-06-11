@@ -345,12 +345,13 @@ void StartTaskHandleLIN(void const * argument)
 
 		LIN_MSG received_msg_LIN;
 		xQueueReceive(queue_LIN_message_recievedHandle, &received_msg_LIN, 100);//queue message recieved
+		int i, size;
+		char header[32] = "Master clock recieved : ";
+		char time_str[32];
 
-		switch(received_msg_LIN.PIDField & LIN_ID_Msk >> LIN_ID_Pos){
+		switch(received_msg_LIN.ID & LIN_ID_Msk >> LIN_ID_Pos){
 			case 0b001://afficher l'heure
-				int i = 0;
-				char header[32] = "Master clock recieved : ";
-				char time_str[32];
+				i = 0;
 				time_str[i++] = received_msg_LIN.data[0]+'0';
 				time_str[i++] = received_msg_LIN.data[1]+'0';
 				time_str[i++] = ':';
@@ -374,7 +375,7 @@ void StartTaskHandleLIN(void const * argument)
 				break;
 
 			case 0b100://Envoie trame CAN
-				int size = received_msg_LIN.size;
+				size = received_msg_LIN.size;
 				received_msg_LIN.data[0];
 				//TODO send CAN trame
 				break;
@@ -387,10 +388,10 @@ void StartTaskHandleLIN(void const * argument)
 		xQueueReceive(queue_LIN_waiting_for_responseHandle, &received_msg_LIN, 100);//queue waiting for response
 
 		LIN_MSG response;int i = 0;
+		Time t;
 
-		switch(received_msg_LIN.PIDField & LIN_ID_Msk >> LIN_ID_Pos){
+		switch(received_msg_LIN.ID & LIN_ID_Msk >> LIN_ID_Pos){
 			case 0b001:// Renvoyer l'horloge
-				Time t;
 				getCurrentTime(&t);
 
 				response.data[i++] = t.hou.MSD;
@@ -414,33 +415,37 @@ void StartTaskHandleLIN(void const * argument)
 		LIN_MSG return_msg_LIN;
 		xQueueReceive(queue_LIN_request_reponseHandle, &return_msg_LIN, 100);//queue waiting for response
 
-		switch(return_msg_LIN.PIDField & LIN_ID_Msk >> LIN_ID_Pos){
+		int i;
+		char header_clock[32] = "Slave clock recieved : ";
+		char header_LED[32] = "Slave LED state : ";
+		char time_str[32];
+		char state_LED_ON[3] = "ON";
+		char state_LED_OFF[4] = "Off";
+
+		switch(return_msg_LIN.ID & LIN_ID_Msk >> LIN_ID_Pos){
 			case 0b001://Affiche l'horloge
-				int i = 0;
-				char header[32] = "Slave clock recieved : ";
-				char time_str[32];
-				time_str[i++] = received_msg_LIN.data[0]+'0';
-				time_str[i++] = received_msg_LIN.data[1]+'0';
+				i = 0;
+				time_str[i++] = return_msg_LIN.data[0]+'0';
+				time_str[i++] = return_msg_LIN.data[1]+'0';
 				time_str[i++] = ':';
-				time_str[i++] = received_msg_LIN.data[2]+'0';
-				time_str[i++] = received_msg_LIN.data[3]+'0';
+				time_str[i++] = return_msg_LIN.data[2]+'0';
+				time_str[i++] = return_msg_LIN.data[3]+'0';
 				time_str[i++] = ':';
-				time_str[i++] = received_msg_LIN.data[4]+'0';
-				time_str[i++] = received_msg_LIN.data[5]+'0';
+				time_str[i++] = return_msg_LIN.data[4]+'0';
+				time_str[i++] = return_msg_LIN.data[5]+'0';
 				time_str[i++] = '\0';
 
-				USART_send_message(header);
+				USART_send_message(header_clock);
 				USART_send_message(time_str);
 				break;
 
 			case 0b010://Affiche l'état de la LED
 
-				int i = 0;
-				char header[32] = "Slave LED state : ";
-				char state[32] = received_msg_LIN.data[0] ? "ON" : "Off";
+				i = 0;
+				char header_LED[32] = "Slave LED state : ";
 
-				USART_send_message(header);
-				USART_send_message(time_str);
+				USART_send_message(header_LED);
+				USART_send_message(return_msg_LIN.data[0] ? state_LED_ON : state_LED_OFF);
 				break;
 		}
 	}
