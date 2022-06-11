@@ -67,13 +67,6 @@ void CAN_config(){
 	CAN->MCR &= ~CAN_MCR_INRQ; //!CAN_MCR_INRQ;
 	//Wait for normal mode
 	while(!(CAN->MSR & CAN_MSR_INAK)); //0x1
-
-	//set a filter that let all pass
-	//Filtre sur les messages envoyes par la maquette
-	CAN_set_filter(0, CAN_FILTER_SCALE_32BIT, CAN_FILTER_MODE_MASK, CAN_FILTER_FIFO0_, 0x10FF50FF, 0xFF00FF00);
-
-	//Filtre sur les réponses qui nous sont envoyees
-	CAN_set_filter(1, CAN_FILTER_SCALE_32BIT, CAN_FILTER_MODE_MASK, CAN_FILTER_FIFO0_, 0x1001FFFF, 0xFFFF0000);
 }
 
 

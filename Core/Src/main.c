@@ -104,6 +104,11 @@ int main(void)
   MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
   CAN_config();
+  //Filtre sur les messages envoyes par la maquette
+  CAN_set_filter(0, CAN_FILTER_SCALE_32BIT, CAN_FILTER_MODE_MASK, CAN_FILTER_FIFO0_, 0x10FF50FF, 0xFF00FF00);
+  //Filtre sur les réponses qui nous sont envoyees
+  CAN_set_filter(1, CAN_FILTER_SCALE_32BIT, CAN_FILTER_MODE_MASK, CAN_FILTER_FIFO0_, 0x1001FFFF, 0xFFFF0000);
+
   LIN_config();
   clock_Init();
   USART_config();
@@ -333,7 +338,6 @@ void freeRTOSClignoter(void const * argument)
 void StartTaskHandleLIN(void const * argument)
 {
   /* USER CODE BEGIN StartTaskHandleLIN */
-
   /* Infinite loop */
   for(;;) {
 
@@ -343,12 +347,36 @@ void StartTaskHandleLIN(void const * argument)
 		xQueueReceive(queue_LIN_message_recievedHandle, &received_msg_LIN, 100);//queue message recieved
 
 		switch(received_msg_LIN.PIDField & LIN_ID_Msk >> LIN_ID_Pos){
-			case 0b001:
+			case 0b001://afficher l'heure
+				int i = 0;
+				char header[32] = "Master clock recieved : ";
+				char time_str[32];
+				time_str[i++] = received_msg_LIN.data[0]+'0';
+				time_str[i++] = received_msg_LIN.data[1]+'0';
+				time_str[i++] = ':';
+				time_str[i++] = received_msg_LIN.data[2]+'0';
+				time_str[i++] = received_msg_LIN.data[3]+'0';
+				time_str[i++] = ':';
+				time_str[i++] = received_msg_LIN.data[4]+'0';
+				time_str[i++] = received_msg_LIN.data[5]+'0';
+				time_str[i++] = '\0';
+
+				USART_send_message(header);
+				USART_send_message(time_str);
+				break;
+
+			case 0b010://modifier l'état de la LED
 				if(received_msg_LIN.data[0]){
 					HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, 1);
 				}else{
 					HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, 0);
 				}
+				break;
+
+			case 0b100://Envoie trame CAN
+				int size = received_msg_LIN.size;
+				received_msg_LIN.data[0];
+				//TODO send CAN trame
 				break;
 		}
 	}
@@ -361,10 +389,9 @@ void StartTaskHandleLIN(void const * argument)
 		LIN_MSG response;int i = 0;
 
 		switch(received_msg_LIN.PIDField & LIN_ID_Msk >> LIN_ID_Pos){
-			case 0b000:
-				//TODO Renvoyer l'horloge
+			case 0b001:// Renvoyer l'horloge
 				Time t;
-				getCurrentTime(Time t);
+				getCurrentTime(&t);
 
 				response.data[i++] = t.hou.MSD;
 				response.data[i++] = t.hou.LSD;
@@ -373,8 +400,8 @@ void StartTaskHandleLIN(void const * argument)
 				response.data[i++] = t.sec.MSD;
 				response.data[i++] = t.sec.LSD;
 				break;
-			case 0b001:
-				//renvoyer l'état de la LED
+
+			case 0b010://renvoyer l'état de la LED
 				response.data[i++] = HAL_GPIO_ReadPin(LED_Vert_GPIO_Port, LED_Vert_Pin);
 				break;
 		}
@@ -388,11 +415,32 @@ void StartTaskHandleLIN(void const * argument)
 		xQueueReceive(queue_LIN_request_reponseHandle, &return_msg_LIN, 100);//queue waiting for response
 
 		switch(return_msg_LIN.PIDField & LIN_ID_Msk >> LIN_ID_Pos){
-			case 0b000:
-				//TODO Afficher l'horloge
+			case 0b001://Affiche l'horloge
+				int i = 0;
+				char header[32] = "Slave clock recieved : ";
+				char time_str[32];
+				time_str[i++] = received_msg_LIN.data[0]+'0';
+				time_str[i++] = received_msg_LIN.data[1]+'0';
+				time_str[i++] = ':';
+				time_str[i++] = received_msg_LIN.data[2]+'0';
+				time_str[i++] = received_msg_LIN.data[3]+'0';
+				time_str[i++] = ':';
+				time_str[i++] = received_msg_LIN.data[4]+'0';
+				time_str[i++] = received_msg_LIN.data[5]+'0';
+				time_str[i++] = '\0';
+
+				USART_send_message(header);
+				USART_send_message(time_str);
 				break;
-			case 0b001:
-				//TODO Afficher l'état de la LED
+
+			case 0b010://Affiche l'état de la LED
+
+				int i = 0;
+				char header[32] = "Slave LED state : ";
+				char state[32] = received_msg_LIN.data[0] ? "ON" : "Off";
+
+				USART_send_message(header);
+				USART_send_message(time_str);
 				break;
 		}
 	}

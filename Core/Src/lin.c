@@ -140,7 +140,7 @@ void LIN_send_request(LIN_MSG *req) {
 	// send PID
 	UART_PutChar(req->PIDField);
 
-	//TODO set request MODE (the device wait for a response)
+	//set request MODE (the device wait for a response)
 	int dump = 1;
 	xQueueSendFromISR(queue_LIN_request_modeHandle, &dump, 0);
 
@@ -222,14 +222,14 @@ void USART3_IRQHandler(void) {
 	extern osMessageQId queue_LIN_request_reponseHandle;
 
 	if (uxQueueMessagesWaitingFromISR(queue_LIN_request_modeHandle)) {// read queue request mode
-		//TODO:empty queue request mode
+		//queue request mode
 		int dump;
 		xQueueReceiveFromISR(queue_LIN_request_modeHandle, &dump, 100);//queue message recieved
 
 		LIN_MSG msg;
 		LIN_read_message_content(&msg);
 
-		//TODO:write in queue request response
+		//write in queue request response
 		xQueueSendFromISR(queue_LIN_request_reponseHandle, &msg, 0);
 
 		return;
@@ -245,10 +245,10 @@ void USART3_IRQHandler(void) {
 		msg.size = msg.PIDField & LIN_ID_Msk >> LIN_ID_Pos;
 
 		if (!(msg.PIDField & LIN_MODE_Msk)) {// response
-			//TODO:queue waiting for response
+			//queue waiting for response
 			xQueueSendFromISR(queue_LIN_waiting_for_responseHandle, &msg, 0);
 		} else {
-			//TODO:queue message recieved
+			//queue message recieved
 			LIN_read_message_content(&msg);
 			xQueueSendFromISR(queue_LIN_message_recievedHandle, &msg, 0);
 		}
