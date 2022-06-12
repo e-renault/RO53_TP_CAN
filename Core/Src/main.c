@@ -83,6 +83,7 @@ int main(void)
   USART_config();
   /* USER CODE END 2 */
 
+
   /* Create the queue(s) */
   /* definition and creation of queue_LIN_request_mode */
   osMessageQDef(queue_LIN_request_mode, 1, uint8_t);
@@ -96,9 +97,9 @@ int main(void)
   osMessageQDef(queue_LIN_waiting_for_response, 1, LIN_MSG);
   queue_LIN_waiting_for_responseHandle = osMessageCreate(osMessageQ(queue_LIN_waiting_for_response), NULL);
 
-  /* definition and creation of queue_LIN_message_received */
-  osMessageQDef(queue_LIN_message_received, 1, LIN_MSG);
-  queue_LIN_message_recievedHandle = osMessageCreate(osMessageQ(queue_LIN_message_received), NULL);
+  /* definition and creation of queue_LIN_message_recieved */
+  osMessageQDef(queue_LIN_message_recieved, 1, LIN_MSG);
+  queue_LIN_message_recievedHandle = osMessageCreate(osMessageQ(queue_LIN_message_recieved), NULL);
 
   /* definition and creation of queue_CAN_msg */
   osMessageQDef(queue_CAN_msg, 8, CAN_MSG);
@@ -196,14 +197,14 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, LED_Vert_Pin|LED_Orange_Pin|LED_Rouge_Pin|LED_Bleu_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : LED_Vert_Pin LED_Orange_Pin LED_Rouge_Pin LED_Bleu_Pin */
-  GPIO_InitStruct.Pin = LED_Vert_Pin|LED_Orange_Pin|LED_Rouge_Pin|LED_Bleu_Pin;
+  /*Configure GPIO pin : LED_Vert_Pin */
+  GPIO_InitStruct.Pin = LED_Vert_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+  HAL_GPIO_Init(LED_Vert_GPIO_Port, &GPIO_InitStruct);
 
 }
 
@@ -221,9 +222,6 @@ void startTaskCommodoReq(void const * argument)
   /* Infinite loop */
   for(;;)
   {
-	  // toggle pin mode
-	  HAL_GPIO_TogglePin(LED_Bleu_GPIO_Port, LED_Bleu_Pin);
-
 	  //Demande de l'etat de la bague de l'essuie glace arriere
 	  uint32_t msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_COMMODOS_GROUP << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
 	  uint8_t data[1];
@@ -234,7 +232,6 @@ void startTaskCommodoReq(void const * argument)
   }
   /* USER CODE END 5 */
 }
-
 
 /* USER CODE BEGIN Header_startTaskBlinker */
 /**
@@ -251,7 +248,6 @@ void startTaskBlinker(void const * argument)
 	char msg_allumer[16]="Light On";
 	/* Infinite loop */
 	for(;;){
-		HAL_GPIO_TogglePin(LED_Rouge_GPIO_Port, LED_Rouge_Pin);
 		if(light_state){//If the rear left turn signal is on
 			//Switch the rear left turn signal on
 			//Display message eteindre
@@ -425,7 +421,6 @@ void StartTaskHandleLIN(void const * argument)
   /* USER CODE END StartTaskHandleLIN */
 }
 
-
 /* USER CODE BEGIN Header_StartTaskHandleCAN */
 /**
 * @brief Function implementing the taskHandleCAN thread.
@@ -487,7 +482,6 @@ void StartTaskHandleCAN(void const * argument)
   /* USER CODE END StartTaskHandleCAN */
 }
 
-
  /**
   * @brief  Period elapsed callback in non blocking mode
   * @note   This function is called  when TIM6 interrupt took place, inside
@@ -498,17 +492,10 @@ void StartTaskHandleCAN(void const * argument)
   */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-  /* USER CODE BEGIN Callback 0 */
-
-  /* USER CODE END Callback 0 */
   if (htim->Instance == TIM6) {
     HAL_IncTick();
   }
-  /* USER CODE BEGIN Callback 1 */
-
-  /* USER CODE END Callback 1 */
 }
-
 
 /**
   * @brief  This function is executed in case of error occurrence.
@@ -525,22 +512,5 @@ void Error_Handler(void)
   /* USER CODE END Error_Handler_Debug */
 }
 
-
-#ifdef  USE_FULL_ASSERT
-/**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
-void assert_failed(uint8_t *file, uint32_t line)
-{
-  /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-  /* USER CODE END 6 */
-}
-#endif /* USE_FULL_ASSERT */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

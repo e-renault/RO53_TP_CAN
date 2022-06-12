@@ -60,12 +60,6 @@ void Error_Handler(void);
 /* Private defines -----------------------------------------------------------*/
 #define LED_Vert_Pin GPIO_PIN_12
 #define LED_Vert_GPIO_Port GPIOD
-#define LED_Orange_Pin GPIO_PIN_13
-#define LED_Orange_GPIO_Port GPIOD
-#define LED_Rouge_Pin GPIO_PIN_14
-#define LED_Rouge_GPIO_Port GPIOD
-#define LED_Bleu_Pin GPIO_PIN_15
-#define LED_Bleu_GPIO_Port GPIOD
 /* USER CODE BEGIN Private defines */
 #define CS_I2C_SPI_Pin GPIO_PIN_3
 #define CS_I2C_SPI_GPIO_Port GPIOE
