@@ -27,6 +27,7 @@
 #include "cmsis_os.h"
 #include "lin.h"
 #include "can.h"
+#include "myUART.h"
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN TD */
 
@@ -246,8 +247,15 @@ void CAN1_RX0_IRQHandler(void) {
 	CAN1->RF0R |= 0b1UL << CAN_RF0R_RFOM0_Pos;
 
 	osMessagePut(queue_CAN_msgHandle, &incoming_msg_CAN, 100);
+}
 
-	/** Your code there**/
+void USART2_IRQHandler(void) {
+	uint8_t chn[30];
+	uint32_t len;
+
+	len = USART2_Receive(chn, 30);
+
+	/** insert you code there **/
 }
 
 /* USER CODE END 1 */

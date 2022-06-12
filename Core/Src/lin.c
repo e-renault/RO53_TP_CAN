@@ -210,5 +210,6 @@ void LIN_write_message_content(LIN_MSG* msg) {
 	for (int i = 0; i < msg->size; i++) {
 		UART_PutChar(msg->data[i]);
 	}
-	UART_PutChar(actual_check_sum);
+	if (msg->size != 0)
+		UART_PutChar(actual_check_sum);
 }

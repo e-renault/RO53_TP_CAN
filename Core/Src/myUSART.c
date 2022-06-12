@@ -125,12 +125,3 @@ int USART2_Receive(uint8_t * data, uint32_t len) {//data l'adresse d'enregistrem
 	}
 	return i;					//retourne la taille de la chaine de caractère, i<=len
 }
-
-void USART2_IRQHandler(void) {
-	uint8_t chn[30];
-	uint32_t len;
-
-	len = USART2_Receive(chn, 30);
-
-	/** insert you code there **/
-}

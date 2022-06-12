@@ -40,7 +40,7 @@ osMessageQId queue_LIN_waiting_for_responseHandle;
 osMessageQId queue_LIN_message_recievedHandle;
 osMessageQId queue_CAN_msgHandle;
 /* USER CODE BEGIN PV */
-int activate = 0;
+int blink_mode_activated = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -96,9 +96,9 @@ int main(void)
   osMessageQDef(queue_LIN_waiting_for_response, 1, LIN_MSG);
   queue_LIN_waiting_for_responseHandle = osMessageCreate(osMessageQ(queue_LIN_waiting_for_response), NULL);
 
-  /* definition and creation of queue_LIN_message_recieved */
-  osMessageQDef(queue_LIN_message_recieved, 1, LIN_MSG);
-  queue_LIN_message_recievedHandle = osMessageCreate(osMessageQ(queue_LIN_message_recieved), NULL);
+  /* definition and creation of queue_LIN_message_received */
+  osMessageQDef(queue_LIN_message_received, 1, LIN_MSG);
+  queue_LIN_message_recievedHandle = osMessageCreate(osMessageQ(queue_LIN_message_received), NULL);
 
   /* definition and creation of queue_CAN_msg */
   osMessageQDef(queue_CAN_msg, 8, CAN_MSG);
@@ -221,6 +221,7 @@ void startTaskCommodoReq(void const * argument)
   /* Infinite loop */
   for(;;)
   {
+	  // toggle pin mode
 	  HAL_GPIO_TogglePin(LED_Bleu_GPIO_Port, LED_Bleu_Pin);
 
 	  //Demande de l'etat de la bague de l'essuie glace arriere
@@ -245,13 +246,13 @@ void startTaskCommodoReq(void const * argument)
 void startTaskBlinker(void const * argument)
 {
   /* USER CODE BEGIN startTaskBlinker */
-	int allume = 0;
-	char msg_eteindre[9]="eteindre";
-	char msg_allumer[8]="allumer";
+	int light_state = 0;
+	char msg_eteindre[16]="Light Off";
+	char msg_allumer[16]="Light On";
 	/* Infinite loop */
 	for(;;){
 		HAL_GPIO_TogglePin(LED_Rouge_GPIO_Port, LED_Rouge_Pin);
-		if(allume){//If the rear left turn signal is on
+		if(light_state){//If the rear left turn signal is on
 			//Switch the rear left turn signal on
 			//Display message eteindre
 			USART_send_message(msg_eteindre);
@@ -261,18 +262,18 @@ void startTaskBlinker(void const * argument)
 			uint8_t data[1] = {CAN_LIGHT_OFF};
 			CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
 
-			allume = 0;
-		}else if (activate){//If the rear left turn signal is off and if it must be activated
-			  //Switch the rear left turn signal off
-			  //Display message allumer
-			  USART_send_message(msg_allumer);
+			light_state = 0;
+		}else if (blink_mode_activated){//If the rear left turn signal is off and if it must be activated
+			//Switch the rear left turn signal off
+			//Display message allumer
+			USART_send_message(msg_allumer);
 
-			  //Switch on rear left turn signal
-			  uint32_t msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
-			  uint8_t data[1] = {CAN_LIGHT_LEFT_REAR_TURN_SIGNAL_ON};
-			  CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
+			//Switch on rear left turn signal
+			uint32_t msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
+			uint8_t data[1] = {CAN_LIGHT_LEFT_REAR_TURN_SIGNAL_ON};
+			CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
 
-			  allume = 1;
+			light_state = 1;
 		}
 		osDelay(1000);
 	}
@@ -292,19 +293,23 @@ void StartTaskHandleLIN(void const * argument)
   /* Infinite loop */
   for(;;) {
 
-	if (uxQueueMessagesWaiting(queue_LIN_message_recievedHandle)) {/** read queue message recieved **/
+	// subtask one, look for received message
+	if (uxQueueMessagesWaiting(queue_LIN_message_recievedHandle)) {/** read queue message received **/
 
-		LIN_MSG received_msg_LIN;
-		xQueueReceive(queue_LIN_message_recievedHandle, &received_msg_LIN, 100);//queue message recieved
+		LIN_MSG received_msg_LIN;//received message
+		xQueueReceive(queue_LIN_message_recievedHandle, &received_msg_LIN, 100);//queue message received
+
+		//variable cannot be declared in switch case statement
 		int i;
-		char header[32] = "Master clock recieved : ";
+		char header[32] = "Master clock received : ";
 		char time_str[32];
 		uint32_t CAN_msg_id;
-		uint8_t CAN_data[1];
+		uint8_t CAN_data[8];
 
 		switch(received_msg_LIN.ID & LIN_ID_Msk >> LIN_ID_Pos){
 			case 0b001://Display time
 				i = 0;
+				//recover time data and push it into the string list
 				time_str[i++] = received_msg_LIN.data[0]+'0';
 				time_str[i++] = received_msg_LIN.data[1]+'0';
 				time_str[i++] = ':';
@@ -313,18 +318,14 @@ void StartTaskHandleLIN(void const * argument)
 				time_str[i++] = ':';
 				time_str[i++] = received_msg_LIN.data[4]+'0';
 				time_str[i++] = received_msg_LIN.data[5]+'0';
-				time_str[i++] = '\0';
+				time_str[i++] = '\0';//string end
 
 				USART_send_message(header);
 				USART_send_message(time_str);
 				break;
 
 			case 0b010://Change LED state
-				if(received_msg_LIN.data[0]){
-					HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, 1);
-				}else{
-					HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, 0);
-				}
+				HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, received_msg_LIN.data[0]);
 				break;
 
 			case 0b100://Send a trame CAN to the rear left turn signal to switch it on or off
@@ -337,18 +338,24 @@ void StartTaskHandleLIN(void const * argument)
 		}
 	}
 
+	// subtask 2 check if a response is requiered
 	if (uxQueueMessagesWaiting(queue_LIN_waiting_for_responseHandle)) {/** read queue waiting for response **/
 
-		LIN_MSG received_msg_LIN;
+		LIN_MSG received_msg_LIN;//received message header (ID + size)
 		xQueueReceive(queue_LIN_waiting_for_responseHandle, &received_msg_LIN, 100);//queue waiting for response
 
-		LIN_MSG response;int i = 0;
+		//variable cannot be declared in switch case statement
+		LIN_MSG response;
+		response.size = received_msg_LIN.size;
+		int i;
 		Time t;
 
 		switch(received_msg_LIN.ID & LIN_ID_Msk >> LIN_ID_Pos){
 			case 0b001:// Renvoyer l'horloge
 				getCurrentTime(&t);
+				i = 0;
 
+				// generate response
 				response.data[i++] = t.hou.MSD;
 				response.data[i++] = t.hou.LSD;
 				response.data[i++] = t.min.MSD;
@@ -357,22 +364,28 @@ void StartTaskHandleLIN(void const * argument)
 				response.data[i++] = t.sec.LSD;
 				break;
 
-			case 0b010://renvoyer l'état de la LED
+			case 0b010://return LED State
 				response.data[i++] = HAL_GPIO_ReadPin(LED_Vert_GPIO_Port, LED_Vert_Pin);
 				break;
+			default:
+				response.size = 0;//error invalid ID
 		}
 
+		//return response
 		LIN_write_message_content(&response);
 	}
 
+	//subtask 3 check if an answer has been published
 	if (uxQueueMessagesWaiting(queue_LIN_request_reponseHandle)) {/** read queue request response **/
 
-		LIN_MSG return_msg_LIN;
+		LIN_MSG return_msg_LIN;//response
 		xQueueReceive(queue_LIN_request_reponseHandle, &return_msg_LIN, 100);//queue waiting for response
 
+		//variable cannot be declared in switch case statement
 		int i;
-		char header_clock[32] = "Slave clock recieved : ";
+		char header_clock[32] = "Slave clock received : ";
 		char header_LED[32] = "Slave LED state : ";
+		char unknown[32] = "Unknown recieved";
 		char time_str[32];
 		char state_LED_ON[3] = "ON";
 		char state_LED_OFF[4] = "Off";
@@ -395,11 +408,11 @@ void StartTaskHandleLIN(void const * argument)
 				break;
 
 			case 0b010://Affiche l'état de la LED
-				i = 0;
-
 				USART_send_message(header_LED);
 				USART_send_message(return_msg_LIN.data[0] ? state_LED_ON : state_LED_OFF);
 				break;
+			default:
+				USART_send_message(unknown);//ID not recognized
 		}
 	}
 
@@ -422,10 +435,10 @@ void StartTaskHandleCAN(void const * argument)
   /* USER CODE BEGIN StartTaskHandleCAN */
   /* Infinite loop */
   for(;;) {
-	if (uxQueueMessagesWaiting(queue_CAN_msgHandle)) {/** read queue message recieved **/
+	if (uxQueueMessagesWaiting(queue_CAN_msgHandle)) {/** read queue message received **/
 
 		CAN_MSG received_msg_CAN;
-		xQueueReceive(queue_CAN_msgHandle, &received_msg_CAN, 100);//queue message recieved
+		xQueueReceive(queue_CAN_msgHandle, &received_msg_CAN, 100);//queue message received
 
 		//Gestion des donnees recues
 		if((received_msg_CAN.ID & 0x00110000) == (CAN_MASTER_ID << 16)){
@@ -435,13 +448,13 @@ void StartTaskHandleCAN(void const * argument)
 				case 0x0D:
 				case 0x0B:
 					//Activer le clignotement
-					activate = 1;
+					blink_mode_activated = 1;
 					break;
 				case 0x1E://Bague essuie glace arriere sur le 0
 				case 0x1D:
 				case 0x1B:
 					//Desactiver le clignotement
-					activate = 0;
+					blink_mode_activated = 0;
 					break;
 			}
 		} else {
