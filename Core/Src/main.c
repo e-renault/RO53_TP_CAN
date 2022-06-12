@@ -227,9 +227,10 @@ void freeRTOSTestCommand(void const * argument)
 
 	  //Demande de l'etat de la bague de l'essuie glace arriere
 	  uint32_t msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_COMMODOS_GROUP << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
-	  uint8_t data[1] = {CAN_LIGHT_OFF};
+	  uint8_t data[1];
 	  CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_RQST, 0, data);
 
+	  //Bloquer la tache pendant 100ms
 	  osDelay(100);
   }
   /* USER CODE END 5 */
@@ -246,7 +247,6 @@ void freeRTOSTestCommand(void const * argument)
 void freeRTOSClignoter(void const * argument)
 {
   /* USER CODE BEGIN freeRTOSClignoter */
-	  osDelay(500);
 	  int allume = 0;
 	  char msg_eteindre[9]="eteindre";
 	  char msg_allumer[8]="allumer";
@@ -254,7 +254,8 @@ void freeRTOSClignoter(void const * argument)
 	  for(;;)
 	  {
 		  HAL_GPIO_TogglePin(LED_Rouge_GPIO_Port, LED_Rouge_Pin);
-		  if(allume){
+		  if(allume){//If the rear left turn signal is on
+			  //Switch the rear left turn signal on
 			  //Display message eteindre
 			  USART_send_message(msg_eteindre);
 
@@ -264,7 +265,8 @@ void freeRTOSClignoter(void const * argument)
 			  CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
 
 			  allume = 0;
-		  }else if (activate){
+		  }else if (activate){//If the rear left turn signal is off and if it must be activated
+			  //Switch the rear left turn signal off
 			  //Display message allumer
 			  USART_send_message(msg_allumer);
 
