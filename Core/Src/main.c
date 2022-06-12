@@ -30,8 +30,8 @@
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
-osThreadId taskTestCommandHandle;
-osThreadId taskClignoterHandle;
+osThreadId taskCommodoReqHandle;
+osThreadId taskBlinkerHandle;
 osThreadId taskHandleLINHandle;
 osThreadId taskHandleCANHandle;
 osMessageQId queue_LIN_request_modeHandle;
@@ -46,11 +46,12 @@ int activate = 0;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-void freeRTOSTestCommand(void const * argument);
-void freeRTOSClignoter(void const * argument);
+void startTaskCommodoReq(void const * argument);
+void startTaskBlinker(void const * argument);
 void StartTaskHandleLIN(void const * argument);
 void StartTaskHandleCAN(void const * argument);
 
+/* Private user code ---------------------------------------------------------*/
 
 /**
   * @brief  The application entry point.
@@ -68,7 +69,6 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-
   /* USER CODE BEGIN 2 */
   /*Configure the CAN*/
   CAN_config();
@@ -82,7 +82,6 @@ int main(void)
   clock_Init();
   USART_config();
   /* USER CODE END 2 */
-
 
   /* Create the queue(s) */
   /* definition and creation of queue_LIN_request_mode */
@@ -107,13 +106,13 @@ int main(void)
 
 
   /* Create the thread(s) */
-  /* definition and creation of taskTestCommand */
-  osThreadDef(taskTestCommand, freeRTOSTestCommand, osPriorityNormal, 0, 128);
-  taskTestCommandHandle = osThreadCreate(osThread(taskTestCommand), NULL);
+  /* definition and creation of taskCommodoReq */
+  osThreadDef(taskCommodoReq, startTaskCommodoReq, osPriorityNormal, 0, 128);
+  taskCommodoReqHandle = osThreadCreate(osThread(taskCommodoReq), NULL);
 
-  /* definition and creation of taskClignoter */
-  osThreadDef(taskClignoter, freeRTOSClignoter, osPriorityAboveNormal, 0, 128);
-  taskClignoterHandle = osThreadCreate(osThread(taskClignoter), NULL);
+  /* definition and creation of taskBlinker */
+  osThreadDef(taskBlinker, startTaskBlinker, osPriorityAboveNormal, 0, 128);
+  taskBlinkerHandle = osThreadCreate(osThread(taskBlinker), NULL);
 
   /* definition and creation of taskHandleLIN */
   osThreadDef(taskHandleLIN, StartTaskHandleLIN, osPriorityLow, 0, 128);
@@ -138,7 +137,6 @@ int main(void)
   }
   /* USER CODE END 3 */
 }
-
 
 /**
   * @brief System Clock Configuration
@@ -210,14 +208,14 @@ static void MX_GPIO_Init(void)
 }
 
 
-/* USER CODE BEGIN Header_freeRTOSTestCommand */
+/* USER CODE BEGIN Header_startTaskCommodoReq */
 /**
-  * @brief  Function implementing the taskTestCommand thread.
+  * @brief  Function implementing the taskCommodoReq thread.
   * @param  argument: Not used
   * @retval None
   */
-/* USER CODE END Header_freeRTOSTestCommand */
-void freeRTOSTestCommand(void const * argument)
+/* USER CODE END Header_startTaskCommodoReq */
+void startTaskCommodoReq(void const * argument)
 {
   /* USER CODE BEGIN 5 */
   /* Infinite loop */
@@ -230,42 +228,41 @@ void freeRTOSTestCommand(void const * argument)
 	  uint8_t data[1];
 	  CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_RQST, 0, data);
 
-	  //Bloquer la tache pendant 100ms
+	  //Mettre la tache en attente pendant 100ms
 	  osDelay(100);
   }
   /* USER CODE END 5 */
 }
 
 
-/* USER CODE BEGIN Header_freeRTOSClignoter */
+/* USER CODE BEGIN Header_startTaskBlinker */
 /**
-* @brief Function implementing the taskClignoter thread.
+* @brief Function implementing the taskBlinker thread.
 * @param argument: Not used
 * @retval None
 */
-/* USER CODE END Header_freeRTOSClignoter */
-void freeRTOSClignoter(void const * argument)
+/* USER CODE END Header_startTaskBlinker */
+void startTaskBlinker(void const * argument)
 {
-  /* USER CODE BEGIN freeRTOSClignoter */
-	  int allume = 0;
-	  char msg_eteindre[9]="eteindre";
-	  char msg_allumer[8]="allumer";
-	  /* Infinite loop */
-	  for(;;)
-	  {
-		  HAL_GPIO_TogglePin(LED_Rouge_GPIO_Port, LED_Rouge_Pin);
-		  if(allume){//If the rear left turn signal is on
-			  //Switch the rear left turn signal on
-			  //Display message eteindre
-			  USART_send_message(msg_eteindre);
+  /* USER CODE BEGIN startTaskBlinker */
+	int allume = 0;
+	char msg_eteindre[9]="eteindre";
+	char msg_allumer[8]="allumer";
+	/* Infinite loop */
+	for(;;){
+		HAL_GPIO_TogglePin(LED_Rouge_GPIO_Port, LED_Rouge_Pin);
+		if(allume){//If the rear left turn signal is on
+			//Switch the rear left turn signal on
+			//Display message eteindre
+			USART_send_message(msg_eteindre);
 
-			  //Switch off rear left turn signal
-			  uint32_t msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
-			  uint8_t data[1] = {CAN_LIGHT_OFF};
-			  CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
+			//Switch off rear left turn signal
+			uint32_t msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
+			uint8_t data[1] = {CAN_LIGHT_OFF};
+			CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
 
-			  allume = 0;
-		  }else if (activate){//If the rear left turn signal is off and if it must be activated
+			allume = 0;
+		}else if (activate){//If the rear left turn signal is off and if it must be activated
 			  //Switch the rear left turn signal off
 			  //Display message allumer
 			  USART_send_message(msg_allumer);
@@ -276,13 +273,11 @@ void freeRTOSClignoter(void const * argument)
 			  CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
 
 			  allume = 1;
-		  }
-		  osDelay(1000);
-	  }
-
-  /* USER CODE END freeRTOSClignoter */
+		}
+		osDelay(1000);
+	}
+  /* USER CODE END startTaskBlinker */
 }
-
 
 /* USER CODE BEGIN Header_StartTaskHandleLIN */
 /**
@@ -408,6 +403,7 @@ void StartTaskHandleLIN(void const * argument)
 		}
 	}
 
+	//Mettre la tache en attente pendant 10ms
     osDelay(10);
   }
   /* USER CODE END StartTaskHandleLIN */
@@ -469,6 +465,7 @@ void StartTaskHandleCAN(void const * argument)
 			}
 		}
 	}
+	//Mettre la tache en attente pendant 10ms
 	osDelay(10);
   }
   /* USER CODE END StartTaskHandleCAN */
@@ -496,6 +493,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE END Callback 1 */
 }
 
+
 /**
   * @brief  This function is executed in case of error occurrence.
   * @retval None
@@ -510,6 +508,7 @@ void Error_Handler(void)
   }
   /* USER CODE END Error_Handler_Debug */
 }
+
 
 #ifdef  USE_FULL_ASSERT
 /**
