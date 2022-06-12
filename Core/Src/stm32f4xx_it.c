@@ -192,7 +192,7 @@ void USART3_IRQHandler(void) {
 	if (uxQueueMessagesWaitingFromISR(queue_LIN_request_modeHandle)) {// read queue request mode
 		//queue request mode
 
-		int dump;xQueueReceiveFromISR(queue_LIN_request_modeHandle, &dump, 100);//reset queue message recieved
+		int dump;xQueueReceiveFromISR(queue_LIN_request_modeHandle, (uint32_t) &dump, 100);//reset queue message recieved
 
 		LIN_MSG msg;LIN_read_message_content(&msg);//read message
 
@@ -246,7 +246,7 @@ void CAN1_RX0_IRQHandler(void) {
 	// say that the tram has been red
 	CAN1->RF0R |= 0b1UL << CAN_RF0R_RFOM0_Pos;
 
-	osMessagePut(queue_CAN_msgHandle, &incoming_msg_CAN, 100);
+	osMessagePut(queue_CAN_msgHandle, (uint32_t) &incoming_msg_CAN, 100);
 }
 
 void USART2_IRQHandler(void) {

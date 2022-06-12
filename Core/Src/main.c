@@ -332,7 +332,10 @@ void StartTaskHandleLIN(void const * argument)
 				for(int i=0; (i<8) & (i<received_msg_LIN.size);i++){
 					CAN_data[i] = received_msg_LIN.data[i];
 				}
-				CAN_msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
+				CAN_msg_id = (CAN_ID_BEGINNING << 24)
+						| (CAN_SLAVE_CODE_REAR_LIGHTS << 16)
+						| (CAN_MASTER_ID << 8)
+						| CAN_SLAVE_PORT_C;
 				CAN_send_msg(CAN_MODE_EXTENDED, CAN_msg_id, CAN_MSG_RTR_DATA, 1, CAN_data);
 				break;
 		}

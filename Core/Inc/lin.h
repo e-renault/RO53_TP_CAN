@@ -17,8 +17,8 @@
 #define myUSART (USART3)
 
 typedef struct{
-	uint16_t ID;	//10bits
-	uint8_t data[16];	//8bits but 10 in reality
+	uint16_t ID;
+	uint8_t data[16];
 	uint8_t size;
 }LIN_MSG;
 
