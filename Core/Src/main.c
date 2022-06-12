@@ -29,20 +29,6 @@
 #include "stm32f4xx_hal_gpio.h"
 /* USER CODE END Includes */
 
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
-
 /* Private variables ---------------------------------------------------------*/
 osThreadId taskTestCommandHandle;
 osThreadId taskClignoterHandle;
@@ -65,14 +51,6 @@ void freeRTOSClignoter(void const * argument);
 void StartTaskHandleLIN(void const * argument);
 void StartTaskHandleCAN(void const * argument);
 
-/* USER CODE BEGIN PFP */
-
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-
-/* USER CODE END 0 */
 
 /**
   * @brief  The application entry point.
@@ -80,51 +58,31 @@ void StartTaskHandleCAN(void const * argument);
   */
 int main(void)
 {
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
-
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
-
   /* Configure the system clock */
   SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
-
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+
   /* USER CODE BEGIN 2 */
+  /*Configure the CAN*/
   CAN_config();
   //Filtre sur les messages envoyes par la maquette
   CAN_set_filter(0, CAN_FILTER_SCALE_32BIT, CAN_FILTER_MODE_MASK, CAN_FILTER_FIFO0_, 0x10FF50FF, 0xFF00FF00);
-  //Filtre sur les réponses qui nous sont envoyees
+  //Filtre sur les reponses qui nous sont envoyees
   CAN_set_filter(1, CAN_FILTER_SCALE_32BIT, CAN_FILTER_MODE_MASK, CAN_FILTER_FIFO0_, 0x1001FFFF, 0xFFFF0000);
 
+  /*Congigure the LIN, the clock and the USART*/
   LIN_config();
   clock_Init();
   USART_config();
   /* USER CODE END 2 */
 
-  /* USER CODE BEGIN RTOS_MUTEX */
-  /* add mutexes, ... */
-  /* USER CODE END RTOS_MUTEX */
-
-  /* USER CODE BEGIN RTOS_SEMAPHORES */
-  /* add semaphores, ... */
-  /* USER CODE END RTOS_SEMAPHORES */
-
-  /* USER CODE BEGIN RTOS_TIMERS */
-  /* start timers, add new ones, ... */
-  /* USER CODE END RTOS_TIMERS */
 
   /* Create the queue(s) */
   /* definition and creation of queue_LIN_request_mode */
@@ -147,9 +105,6 @@ int main(void)
   osMessageQDef(queue_CAN_msg, 8, CAN_MSG);
   queue_CAN_msgHandle = osMessageCreate(osMessageQ(queue_CAN_msg), NULL);
 
-  /* USER CODE BEGIN RTOS_QUEUES */
-  /* add queues, ... */
-  /* USER CODE END RTOS_QUEUES */
 
   /* Create the thread(s) */
   /* definition and creation of taskTestCommand */
@@ -168,9 +123,6 @@ int main(void)
   osThreadDef(taskHandleCAN, StartTaskHandleCAN, osPriorityBelowNormal, 0, 128);
   taskHandleCANHandle = osThreadCreate(osThread(taskHandleCAN), NULL);
 
-  /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
-  /* USER CODE END RTOS_THREADS */
 
   /* Start scheduler */
   osKernelStart();
@@ -186,6 +138,7 @@ int main(void)
   }
   /* USER CODE END 3 */
 }
+
 
 /**
   * @brief System Clock Configuration
@@ -256,9 +209,6 @@ static void MX_GPIO_Init(void)
 
 }
 
-/* USER CODE BEGIN 4 */
-
-/* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_freeRTOSTestCommand */
 /**
@@ -285,6 +235,7 @@ void freeRTOSTestCommand(void const * argument)
   /* USER CODE END 5 */
 }
 
+
 /* USER CODE BEGIN Header_freeRTOSClignoter */
 /**
 * @brief Function implementing the taskClignoter thread.
@@ -304,18 +255,20 @@ void freeRTOSClignoter(void const * argument)
 	  {
 		  HAL_GPIO_TogglePin(LED_Rouge_GPIO_Port, LED_Rouge_Pin);
 		  if(allume){
-			  //eteindreClignotant(0x10530112);
+			  //Display message eteindre
 			  USART_send_message(msg_eteindre);
 
+			  //Switch off rear left turn signal
 			  uint32_t msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
 			  uint8_t data[1] = {CAN_LIGHT_OFF};
 			  CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
 
 			  allume = 0;
 		  }else if (activate){
-			  //allumerClignotant(0x10530112, 0x04);
+			  //Display message allumer
 			  USART_send_message(msg_allumer);
 
+			  //Switch on rear left turn signal
 			  uint32_t msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
 			  uint8_t data[1] = {CAN_LIGHT_LEFT_REAR_TURN_SIGNAL_ON};
 			  CAN_send_msg(CAN_MODE_EXTENDED, msg_id, CAN_MSG_RTR_DATA, 1, data);
@@ -327,6 +280,7 @@ void freeRTOSClignoter(void const * argument)
 
   /* USER CODE END freeRTOSClignoter */
 }
+
 
 /* USER CODE BEGIN Header_StartTaskHandleLIN */
 /**
@@ -345,12 +299,14 @@ void StartTaskHandleLIN(void const * argument)
 
 		LIN_MSG received_msg_LIN;
 		xQueueReceive(queue_LIN_message_recievedHandle, &received_msg_LIN, 100);//queue message recieved
-		int i, size;
+		int i;
 		char header[32] = "Master clock recieved : ";
 		char time_str[32];
+		uint32_t CAN_msg_id;
+		uint8_t CAN_data[1];
 
 		switch(received_msg_LIN.ID & LIN_ID_Msk >> LIN_ID_Pos){
-			case 0b001://afficher l'heure
+			case 0b001://Display time
 				i = 0;
 				time_str[i++] = received_msg_LIN.data[0]+'0';
 				time_str[i++] = received_msg_LIN.data[1]+'0';
@@ -366,7 +322,7 @@ void StartTaskHandleLIN(void const * argument)
 				USART_send_message(time_str);
 				break;
 
-			case 0b010://modifier l'état de la LED
+			case 0b010://Change LED state
 				if(received_msg_LIN.data[0]){
 					HAL_GPIO_WritePin(LED_Vert_GPIO_Port, LED_Vert_Pin, 1);
 				}else{
@@ -374,10 +330,12 @@ void StartTaskHandleLIN(void const * argument)
 				}
 				break;
 
-			case 0b100://Envoie trame CAN
-				size = received_msg_LIN.size;
-				received_msg_LIN.data[0];
-				//TODO send CAN trame
+			case 0b100://Send a trame CAN to the rear left turn signal to switch it on or off
+				for(int i=0; (i<8) & (i<received_msg_LIN.size);i++){
+					CAN_data[i] = received_msg_LIN.data[i];
+				}
+				CAN_msg_id = (CAN_ID_BEGINNING << 24) | (CAN_SLAVE_CODE_REAR_LIGHTS << 16) | (CAN_MASTER_ID << 8) | CAN_SLAVE_PORT_C;
+				CAN_send_msg(CAN_MODE_EXTENDED, CAN_msg_id, CAN_MSG_RTR_DATA, 1, CAN_data);
 				break;
 		}
 	}
@@ -440,9 +398,7 @@ void StartTaskHandleLIN(void const * argument)
 				break;
 
 			case 0b010://Affiche l'état de la LED
-
 				i = 0;
-				char header_LED[32] = "Slave LED state : ";
 
 				USART_send_message(header_LED);
 				USART_send_message(return_msg_LIN.data[0] ? state_LED_ON : state_LED_OFF);
@@ -454,6 +410,7 @@ void StartTaskHandleLIN(void const * argument)
   }
   /* USER CODE END StartTaskHandleLIN */
 }
+
 
 /* USER CODE BEGIN Header_StartTaskHandleCAN */
 /**
@@ -514,6 +471,7 @@ void StartTaskHandleCAN(void const * argument)
   }
   /* USER CODE END StartTaskHandleCAN */
 }
+
 
  /**
   * @brief  Period elapsed callback in non blocking mode

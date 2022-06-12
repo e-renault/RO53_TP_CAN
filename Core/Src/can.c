@@ -105,7 +105,7 @@ int CAN_set_filter(int index, int scale_mode, int filter_mode, int FIFO_ID, uint
 }
 
 int CAN_send_msg(uint8_t can_mode, uint32_t msg_id, uint8_t msg_rtr, uint8_t msg_dlc, uint8_t msg_data[]) {
-	//Creation du message
+	//Create the message to send
 	CAN_MSG msg;
 	msg.mode = can_mode;
 	msg.ID = msg_id;
@@ -116,7 +116,7 @@ int CAN_send_msg(uint8_t can_mode, uint32_t msg_id, uint8_t msg_rtr, uint8_t msg
 		msg.data[i] = msg_data[i];
 	}
 
-	//send message
+	//Send the message
 	if (CAN1->TSR & CAN_TSR_TME0_Msk) {
 
 		// set id mode (stadnard or extanded)
@@ -126,10 +126,10 @@ int CAN_send_msg(uint8_t can_mode, uint32_t msg_id, uint8_t msg_rtr, uint8_t msg
 			CAN1->sTxMailBox[0].TIR = (msg.ID << CAN_TI0R_EXID_Pos) | (msg.RTR << CAN_TI0R_RTR_Pos) | (0b1UL << CAN_TI0R_IDE_Pos);
 		}
 
-		// set the DLS (size)
+		//Set the DLC (size)
 		CAN1->sTxMailBox[0].TDTR = msg.DLC;
 
-		// put data in the good order
+		//Put data in the good order
 		CAN1->sTxMailBox[0].TDLR =
 				msg.data[3] << 24 |
 				msg.data[2] << 16 |
@@ -142,7 +142,7 @@ int CAN_send_msg(uint8_t can_mode, uint32_t msg_id, uint8_t msg_rtr, uint8_t msg
 				msg.data[5] << 8 |
 				msg.data[4] << 0;
 
-		//request send message
+		//Request send message
 		CAN1->sTxMailBox[0].TIR |= 0b1UL << CAN_TI0R_TXRQ_Pos;
 
 		return 1;
